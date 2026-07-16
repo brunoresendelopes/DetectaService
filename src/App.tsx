@@ -191,8 +191,13 @@ export default function App() {
               setSelectedOrder(null);
             }}
           >
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/10">
-              <Wrench className="h-4.5 w-4.5 stroke-[2.5]" />
+            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-md overflow-hidden shrink-0 p-1">
+              <img 
+                src="https://www.dropbox.com/scl/fi/dhouz5gxyaebkmjws4mmy/Logo.jpg?rlkey=n4bj15wc5znf939k1l5j3p7z3&st=w8pnp6sz&raw=1" 
+                alt="Logo Detecta" 
+                className="w-full h-full object-contain"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-white italic">
               Detecta<span className="text-blue-400">Service</span>
@@ -307,8 +312,13 @@ export default function App() {
             setSelectedOrder(null);
           }}
         >
-          <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold">
-            <Wrench className="h-4 w-4" />
+          <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shadow-md overflow-hidden shrink-0 p-0.5">
+            <img 
+              src="https://www.dropbox.com/scl/fi/dhouz5gxyaebkmjws4mmy/Logo.jpg?rlkey=n4bj15wc5znf939k1l5j3p7z3&st=w8pnp6sz&raw=1" 
+              alt="Logo Detecta" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <h1 className="text-lg font-bold tracking-tight text-white italic">
             Detecta<span className="text-blue-400">Service</span>

@@ -62,11 +62,19 @@ export default function OrderDetails({
   const [editCompletedAt, setEditCompletedAt] = useState(order.completedAt || '');
   const [editCompletedTime, setEditCompletedTime] = useState(order.completedTime || '');
 
+  // Inline client editing states
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [editClientName, setEditClientName] = useState(order.client || '');
+
   // Keep completion inputs synchronized with order updates
   React.useEffect(() => {
     setEditCompletedAt(order.completedAt || '');
     setEditCompletedTime(order.completedTime || '');
   }, [order.completedAt, order.completedTime]);
+
+  React.useEffect(() => {
+    setEditClientName(order.client || '');
+  }, [order.client]);
 
   // Status badge style resolver
   const getStatusStyle = (status: string) => {
@@ -367,9 +375,55 @@ export default function OrderDetails({
                 </span>
               )}
             </div>
-            <p className="text-xs md:text-sm text-slate-500 font-bold">
-              Cliente: <span className="text-slate-800 font-extrabold">{order.client}</span>
-            </p>
+            <div className="text-xs md:text-sm text-slate-500 font-bold flex flex-wrap items-center gap-1.5">
+              <span>Cliente:</span>
+              {!isEditingClient ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-800 font-extrabold">{order.client}</span>
+                  <button
+                    onClick={() => {
+                      setEditClientName(order.client);
+                      setIsEditingClient(true);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded transition"
+                    title="Editar nome do cliente"
+                  >
+                    Editar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-1 sm:mt-0">
+                  <input
+                    type="text"
+                    value={editClientName}
+                    onChange={(e) => setEditClientName(e.target.value)}
+                    className="bg-white border border-slate-300 rounded px-2 py-0.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full sm:w-64"
+                    placeholder="Nome do cliente"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (editClientName.trim()) {
+                        onUpdateOrder({
+                          ...order,
+                          client: editClientName.trim()
+                        });
+                        setIsEditingClient(false);
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                  >
+                    Salvar
+                  </button>
+                  <button
+                    onClick={() => setIsEditingClient(false)}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quick status controls */}

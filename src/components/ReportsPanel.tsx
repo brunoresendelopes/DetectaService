@@ -112,6 +112,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
       orderId: string;
       orderStatus: string;
       orderRework: boolean;
+      regularHours: number;
+      overtimeHours: number;
     }> = [];
 
     // Step 1: Collect executions and match with parent order info
@@ -144,13 +146,17 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           if (!matchesSubservices && !matchesDetails && !matchesSection && !matchesOperator) return;
         }
 
+        const overtimeInfo = calculateOvertime(exec.date, exec.startTime, exec.endTime);
+
         matchedExecutions.push({
           exec,
           orderCode: order.code,
           client: order.client,
           orderId: order.id,
           orderStatus: order.status,
-          orderRework: order.rework
+          orderRework: order.rework,
+          regularHours: overtimeInfo.regularHours,
+          overtimeHours: overtimeInfo.overtimeHours
         });
       });
     });
@@ -160,29 +166,35 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
 
     // Step 3: Summarize metrics
     const totalHours = matchedExecutions.reduce((sum, item) => sum + item.exec.totalHours, 0);
+    const totalRegularHours = matchedExecutions.reduce((sum, item) => sum + item.regularHours, 0);
+    const totalOvertimeHours = matchedExecutions.reduce((sum, item) => sum + item.overtimeHours, 0);
     const uniqueOrders = new Set(matchedExecutions.map(item => item.orderId));
     const uniqueOperators = new Set(matchedExecutions.map(item => item.exec.operator));
     
     // Group by operator
-    const operatorSummary: { [key: string]: { hours: number; count: number; sections: Set<string> } } = {};
+    const operatorSummary: { [key: string]: { hours: number; regularHours: number; overtimeHours: number; count: number; sections: Set<string> } } = {};
     matchedExecutions.forEach(item => {
       const op = item.exec.operator.toUpperCase();
       if (!operatorSummary[op]) {
-        operatorSummary[op] = { hours: 0, count: 0, sections: new Set() };
+        operatorSummary[op] = { hours: 0, regularHours: 0, overtimeHours: 0, count: 0, sections: new Set() };
       }
       operatorSummary[op].hours += item.exec.totalHours;
+      operatorSummary[op].regularHours += item.regularHours;
+      operatorSummary[op].overtimeHours += item.overtimeHours;
       operatorSummary[op].count += 1;
       operatorSummary[op].sections.add(item.exec.section);
     });
 
     // Group by activity section / description
-    const sectionSummary: { [key: string]: { hours: number; operators: Set<string>; count: number } } = {};
+    const sectionSummary: { [key: string]: { hours: number; regularHours: number; overtimeHours: number; operators: Set<string>; count: number } } = {};
     matchedExecutions.forEach(item => {
       const sec = item.exec.section.toUpperCase();
       if (!sectionSummary[sec]) {
-        sectionSummary[sec] = { hours: 0, operators: new Set(), count: 0 };
+        sectionSummary[sec] = { hours: 0, regularHours: 0, overtimeHours: 0, operators: new Set(), count: 0 };
       }
       sectionSummary[sec].hours += item.exec.totalHours;
+      sectionSummary[sec].regularHours += item.regularHours;
+      sectionSummary[sec].overtimeHours += item.overtimeHours;
       sectionSummary[sec].operators.add(item.exec.operator);
       sectionSummary[sec].count += 1;
     });
@@ -190,6 +202,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
     return {
       executions: matchedExecutions,
       totalHours,
+      totalRegularHours,
+      totalOvertimeHours,
       affectedOrdersCount: uniqueOrders.size,
       affectedOperatorsCount: uniqueOperators.size,
       operatorSummary,
@@ -400,7 +414,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Total hours */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
@@ -410,6 +424,32 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Total Horas</span>
             <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight">
               {formatHours(filteredData.totalHours)}
+            </span>
+          </div>
+        </div>
+
+        {/* Regular Hours */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center shrink-0">
+            <Clock className="h-6 w-6" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Horas Normais</span>
+            <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight text-slate-700">
+              {formatHours(filteredData.totalRegularHours)}
+            </span>
+          </div>
+        </div>
+
+        {/* Overtime Hours */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 ring-2 ring-amber-500/10">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+            <Clock className="h-6 w-6 text-amber-500" />
+          </div>
+          <div>
+            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Horas Extras</span>
+            <span className="text-xl md:text-2xl font-black text-amber-600 font-mono tracking-tight">
+              {formatHours(filteredData.totalOvertimeHours)}
             </span>
           </div>
         </div>
@@ -436,19 +476,6 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Colaboradores</span>
             <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight">
               {filteredData.affectedOperatorsCount}
-            </span>
-          </div>
-        </div>
-
-        {/* Rework Indicator */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Apontamentos</span>
-            <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight">
-              {filteredData.executions.length}
             </span>
           </div>
         </div>
@@ -513,6 +540,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                     <th className="py-3 px-4">COLABORADOR</th>
                     <th className="py-3 px-4">SEÇÃO</th>
                     <th className="py-3 px-4">HORÁRIO</th>
+                    <th className="py-3 px-4 text-right">REGULAR</th>
+                    <th className="py-3 px-4 text-right">H. EXTRA</th>
                     <th className="py-3 px-4 text-right">TOTAL</th>
                   </tr>
                 </thead>
@@ -533,6 +562,18 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         </td>
                         <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                           {item.exec.startTime}h - {item.exec.endTime}h
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-slate-600">
+                          {formatHours(item.regularHours)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono">
+                          {item.overtimeHours > 0 ? (
+                            <span className="inline-block bg-amber-50 text-amber-700 border border-amber-200/50 px-2 py-0.5 rounded-md font-bold">
+                              {formatHours(item.overtimeHours)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">-</span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-right font-bold text-slate-950 font-mono">
                           {formatHours(item.exec.totalHours)}
@@ -556,7 +597,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.entries(filteredData.operatorSummary).map(([name, data]) => {
-                  const dataTyped = data as { hours: number; count: number; sections: Set<string> };
+                  const dataTyped = data as { hours: number; regularHours: number; overtimeHours: number; count: number; sections: Set<string> };
                   return (
                     <div key={name} className="bg-slate-50 rounded-xl p-4 border border-slate-150/50 hover:border-slate-300 transition">
                       <div className="flex justify-between items-start mb-2.5">
@@ -566,9 +607,14 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                             {dataTyped.count} apontamento(s)
                           </span>
                         </div>
-                        <span className="text-sm font-black font-mono text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/50">
-                          {formatHours(dataTyped.hours)}
-                        </span>
+                        <div className="text-right">
+                          <span className="text-sm font-black font-mono text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/50">
+                            {formatHours(dataTyped.hours)}
+                          </span>
+                          <div className="text-[10px] text-slate-500 font-semibold font-mono mt-1">
+                            Reg: {formatHours(dataTyped.regularHours)} | <span className="text-amber-600 font-bold">Extra: {formatHours(dataTyped.overtimeHours)}</span>
+                          </div>
+                        </div>
                       </div>
                       
                       <div className="flex flex-wrap gap-1 mt-2.5">
@@ -682,14 +728,18 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                 </div>
 
                 {/* Quick Indicators inside Printable */}
-                <div className="grid grid-cols-3 gap-4 mb-6 text-center">
+                <div className="grid grid-cols-4 gap-4 mb-6 text-center">
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Horas Totais</span>
                     <span className="text-base font-black text-slate-950 font-mono">{formatHours(filteredData.totalHours)}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Qtde. O.S.</span>
-                    <span className="text-base font-black text-slate-950 font-mono">{filteredData.affectedOrdersCount}</span>
+                    <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Horas Regulares</span>
+                    <span className="text-base font-black text-slate-950 font-mono">{formatHours(filteredData.totalRegularHours)}</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <span className="block text-[8px] font-black text-slate-400 uppercase font-mono text-amber-600">Horas Extras</span>
+                    <span className="text-base font-black text-amber-600 font-mono">{formatHours(filteredData.totalOvertimeHours)}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Qtde Apontamentos</span>
@@ -707,6 +757,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         <th className="py-2 px-2">CLIENTE</th>
                         <th className="py-2 px-2">SEÇÃO</th>
                         <th className="py-2 px-2">COLABORADOR</th>
+                        <th className="py-2 px-2 text-right">REGULAR</th>
+                        <th className="py-2 px-2 text-right">H. EXTRA</th>
                         <th className="py-2 px-2 text-right">TOTAL HORAS</th>
                       </tr>
                     </thead>
@@ -720,6 +772,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                             <td className="py-2 px-2 max-w-[120px] truncate">{item.client}</td>
                             <td className="py-2 px-2 font-mono text-[10px]">{item.exec.section}</td>
                             <td className="py-2 px-2 uppercase font-bold text-[10px]">{item.exec.operator}</td>
+                            <td className="py-2 px-2 text-right font-mono">{formatHours(item.regularHours)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-amber-600 font-bold">{item.overtimeHours > 0 ? formatHours(item.overtimeHours) : '-'}</td>
                             <td className="py-2 px-2 text-right font-mono font-bold">{formatHours(item.exec.totalHours)}</td>
                           </tr>
                         );
