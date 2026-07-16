@@ -209,10 +209,22 @@ export function subscribeServiceOrders(onUpdate: (orders: ServiceOrder[]) => voi
   return onSnapshot(q, (snapshot) => {
     const orders: ServiceOrder[] = [];
     snapshot.forEach((doc) => {
-      orders.push(doc.data() as ServiceOrder);
+      const data = doc.data() as ServiceOrder;
+      if (data) {
+        orders.push({
+          ...data,
+          id: data.id || doc.id,
+          code: data.code || ''
+        });
+      }
     });
-    // Sort by code descending by default
-    onUpdate(orders.sort((a, b) => b.code.localeCompare(a.code)));
+    // Safe sort by code descending (e.g. "OS-002" vs "OS-001")
+    orders.sort((a, b) => {
+      const codeA = String(a.code || '');
+      const codeB = String(b.code || '');
+      return codeB.localeCompare(codeA);
+    });
+    onUpdate(orders);
   }, (error) => {
     console.error('Error listening to service orders updates:', error);
   });
@@ -226,7 +238,20 @@ export function subscribeOperators(onUpdate: (operators: Operator[]) => void) {
   return onSnapshot(q, (snapshot) => {
     const operators: Operator[] = [];
     snapshot.forEach((doc) => {
-      operators.push(doc.data() as Operator);
+      const data = doc.data() as Operator;
+      if (data) {
+        operators.push({
+          ...data,
+          id: data.id || doc.id,
+          name: data.name || ''
+        });
+      }
+    });
+    // Safe sort by operator name
+    operators.sort((a, b) => {
+      const nameA = String(a.name || '');
+      const nameB = String(b.name || '');
+      return nameA.localeCompare(nameB);
     });
     onUpdate(operators);
   }, (error) => {

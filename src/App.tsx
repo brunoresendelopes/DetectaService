@@ -411,6 +411,21 @@ export default function App() {
           </button>
         </nav>
 
+        {/* Real-time connection status footer */}
+        <div className="p-4 border-t border-slate-800 text-slate-400 text-xs flex flex-col gap-1.5 bg-slate-950/45 shrink-0 select-none">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-bold text-slate-300 font-mono tracking-wider text-[10px] uppercase">
+              Sincronizado
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-normal">
+            Conectado em tempo real ao banco de dados Cloud.
+          </p>
+        </div>
 
       </aside>
 
@@ -501,6 +516,16 @@ export default function App() {
             <BarChart3 className="h-4.5 w-4.5 text-blue-400" />
             Relatórios & Indicadores
           </button>
+          
+          <div className="pt-2.5 mt-1 border-t border-slate-800 flex items-center gap-2 px-2.5 select-none">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider font-mono">
+              Sincronizado em tempo real
+            </span>
+          </div>
         </div>
       )}
 
@@ -524,6 +549,13 @@ export default function App() {
                 {reworkOrdersCount} em Retrabalho
               </div>
             )}
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-bold font-mono">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              <span>NUVEM ATIVA</span>
+            </div>
             <div className="text-right text-xs text-slate-500 font-semibold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200/50 font-mono">
               <span>{new Date().toLocaleDateString('pt-BR')}</span>
             </div>
