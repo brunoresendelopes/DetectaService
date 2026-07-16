@@ -39,6 +39,7 @@ export default function OrderDetails({
   onEditOrder
 }: OrderDetailsProps) {
   const [showLogForm, setShowLogForm] = useState(false);
+  const [editingExecId, setEditingExecId] = useState<string | null>(null);
   
   // Hours logging form states
   const [selectedOperator, setSelectedOperator] = useState('');
@@ -62,6 +63,38 @@ export default function OrderDetails({
   }, [operators]);
   const [endTime, setEndTime] = useState('17:00');
   const [concluded, setConcluded] = useState(false);
+
+  const handleEditExecClick = (exec: ExecutionEntry) => {
+    setEditingExecId(exec.id);
+    setSelectedOperator(exec.operator);
+    setSelectedSection(exec.section || '');
+    setLogDate(exec.date);
+    setStartTime(exec.startTime);
+    setEndTime(exec.endTime);
+    setDiscountLunch(exec.discountLunch !== false);
+    setLunchStart(exec.lunchStart || '12:00');
+    setLunchEnd(exec.lunchEnd || '13:00');
+    setConcluded(exec.concluded || false);
+    setShowLogForm(true);
+  };
+
+  const handleCancelLogForm = () => {
+    setEditingExecId(null);
+    setShowLogForm(false);
+    // Reset fields to defaults
+    if (operators && operators.length > 0) {
+      const activeOps = operators.filter(op => op.active);
+      setSelectedOperator(activeOps.length > 0 ? activeOps[0].name : operators[0].name);
+    }
+    setSelectedSection('');
+    setLogDate(new Date().toISOString().split('T')[0]);
+    setStartTime('07:00');
+    setEndTime('17:00');
+    setDiscountLunch(true);
+    setLunchStart('12:00');
+    setLunchEnd('13:00');
+    setConcluded(false);
+  };
 
   // Inline completion editing states
   const [isEditingCompletion, setIsEditingCompletion] = useState(false);
@@ -187,19 +220,42 @@ export default function OrderDetails({
     const finalWorkedMinutes = Math.max(0, totalMin - discountMinutes);
     const decimalHours = finalWorkedMinutes / 60;
 
-    const newLog: ExecutionEntry = {
-      id: `exec-${Date.now()}`,
-      date: logDate,
-      startTime,
-      endTime,
-      totalHours: Number(decimalHours.toFixed(2)),
-      operator: selectedOperator,
-      concluded,
-      section: selectedSection,
-      discountLunch,
-      lunchStart: discountLunch ? lunchStart : undefined,
-      lunchEnd: discountLunch ? lunchEnd : undefined
-    };
+    let updatedExecutions: ExecutionEntry[];
+    if (editingExecId) {
+      updatedExecutions = order.executions.map(exec => {
+        if (exec.id === editingExecId) {
+          return {
+            ...exec,
+            date: logDate,
+            startTime,
+            endTime,
+            totalHours: Number(decimalHours.toFixed(2)),
+            operator: selectedOperator,
+            concluded,
+            section: selectedSection,
+            discountLunch,
+            lunchStart: discountLunch ? lunchStart : undefined,
+            lunchEnd: discountLunch ? lunchEnd : undefined
+          };
+        }
+        return exec;
+      });
+    } else {
+      const newLog: ExecutionEntry = {
+        id: `exec-${Date.now()}`,
+        date: logDate,
+        startTime,
+        endTime,
+        totalHours: Number(decimalHours.toFixed(2)),
+        operator: selectedOperator,
+        concluded,
+        section: selectedSection,
+        discountLunch,
+        lunchStart: discountLunch ? lunchStart : undefined,
+        lunchEnd: discountLunch ? lunchEnd : undefined
+      };
+      updatedExecutions = [...order.executions, newLog];
+    }
 
     // Auto update Order status to 'IN_PROGRESS' if it was 'OPEN'
     let newStatus = order.status;
@@ -210,11 +266,11 @@ export default function OrderDetails({
     onUpdateOrder({
       ...order,
       status: newStatus,
-      executions: [...order.executions, newLog]
+      executions: updatedExecutions
     });
 
     // Reset Form
-    setShowLogForm(false);
+    handleCancelLogForm();
   };
 
   // Remove an execution entry
@@ -692,7 +748,16 @@ export default function OrderDetails({
           {/* Inline Appoint Hours Form */}
           {showLogForm && (
             <form onSubmit={handleAddLog} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4 animate-fadeIn">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="text-xs font-bold text-slate-700 uppercase mb-2 border-b border-slate-200 pb-2 flex items-center justify-between">
+                <span>{editingExecId ? 'Editar Apontamento de Horas' : 'Novo Apontamento de Horas'}</span>
+                {editingExecId && (
+                  <span className="text-[10px] bg-amber-150 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                    Modo Edição
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Operator select */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Operador / Técnico</label>
@@ -710,6 +775,24 @@ export default function OrderDetails({
                   </select>
                 </div>
 
+                {/* Section select */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Seção / Setor</label>
+                  <select
+                    value={selectedSection}
+                    onChange={(e) => setSelectedSection(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    required
+                  >
+                    <option value="">Selecione a Seção...</option>
+                    {INITIAL_SECTIONS.map(sec => (
+                      <option key={sec.id} value={sec.name}>
+                        {sec.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Date */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Data</label>
@@ -721,7 +804,9 @@ export default function OrderDetails({
                     required
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Start & End Hour */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -806,7 +891,7 @@ export default function OrderDetails({
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowLogForm(false)}
+                  onClick={handleCancelLogForm}
                   className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg cursor-pointer"
                 >
                   Cancelar
@@ -815,7 +900,7 @@ export default function OrderDetails({
                   type="submit"
                   className="px-3.5 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer"
                 >
-                  Salvar Apontamento
+                  {editingExecId ? 'Salvar Alterações' : 'Salvar Apontamento'}
                 </button>
               </div>
             </form>
@@ -888,7 +973,14 @@ export default function OrderDetails({
                               <span className="inline-flex px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded font-semibold">Não</span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-3 px-4 text-right flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleEditExecClick(exec)}
+                              className="p-1 text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                              title="Editar apontamento"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={() => handleRemoveLog(exec.id)}
                               className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
