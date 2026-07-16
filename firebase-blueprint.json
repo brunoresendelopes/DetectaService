@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "ServiceOrder": {
+      "title": "Service Order",
+      "description": "Represents an industrial service order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "client": { "type": "string" },
+        "activity": { "type": "string" },
+        "rev": { "type": "string" },
+        "quantity": { "type": "number" },
+        "estimatedDelivery": { "type": "string" },
+        "estimatedHours": { "type": "number" },
+        "status": { "type": "string" },
+        "isRework": { "type": "boolean" },
+        "opener": { "type": "string" },
+        "openedAt": { "type": "string" },
+        "inspector": { "type": "string" },
+        "inspectedAt": { "type": "string" },
+        "closedAt": { "type": "string" },
+        "executions": { "type": "array" },
+        "logs": { "type": "array" }
+      },
+      "required": ["id", "code", "client"]
+    },
+    "Operator": {
+      "title": "Operator / Collaborator",
+      "description": "Represents an industrial collaborator or technician",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role", "active"]
+    },
+    "SystemConfig": {
+      "title": "System Configuration",
+      "description": "Holds system-wide configuration, such as access password",
+      "type": "object",
+      "properties": {
+        "password": { "type": "string" }
+      },
+      "required": ["password"]
+    }
+  },
+  "firestore": {
+    "orders/{orderId}": {
+      "schema": "ServiceOrder",
+      "description": "Active and completed service orders"
+    },
+    "operators/{operatorId}": {
+      "schema": "Operator",
+      "description": "Registered collaborators and active status"
+    },
+    "config/system": {
+      "schema": "SystemConfig",
+      "description": "System access configuration"
+    }
+  }
+}

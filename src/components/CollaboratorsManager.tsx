@@ -15,16 +15,64 @@ import {
 interface CollaboratorsManagerProps {
   operators: Operator[];
   onUpdateOperators: (updated: Operator[]) => void;
+  systemPassword?: string;
+  onUpdatePassword?: (newPassword: string) => Promise<void>;
 }
 
 export default function CollaboratorsManager({ 
   operators, 
-  onUpdateOperators 
+  onUpdateOperators,
+  systemPassword = 'detecta2026',
+  onUpdatePassword
 }: CollaboratorsManagerProps) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Password edit states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passSuccess, setPassSuccess] = useState(false);
+  const [passLoading, setPassLoading] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError(null);
+    setPassSuccess(false);
+
+    if (currentPassword !== systemPassword) {
+      setPassError('A senha atual está incorreta.');
+      return;
+    }
+
+    if (newPass.length < 4) {
+      setPassError('A nova senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
+
+    if (newPass !== confirmPass) {
+      setPassError('A confirmação não coincide com a nova senha.');
+      return;
+    }
+
+    try {
+      setPassLoading(true);
+      if (onUpdatePassword) {
+        await onUpdatePassword(newPass);
+      }
+      setPassSuccess(true);
+      setCurrentPassword('');
+      setNewPass('');
+      setConfirmPass('');
+    } catch (err) {
+      setPassError('Erro ao salvar a nova senha.');
+    } finally {
+      setPassLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,53 +137,129 @@ export default function CollaboratorsManager({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Register Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm h-fit space-y-4">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-            <UserPlus className="h-4.5 w-4.5 text-blue-500" />
-            Cadastrar Novo Colaborador
-          </h2>
+        {/* Left Column: Register Form and Security */}
+        <div className="space-y-6 h-fit">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <UserPlus className="h-4.5 w-4.5 text-blue-500" />
+              Cadastrar Novo Colaborador
+            </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs md:text-sm">
-            {error && (
-              <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-xs font-semibold text-rose-700 flex items-start gap-2 animate-fade-in">
-                <AlertCircle className="h-4.5 w-4.5 text-rose-500 shrink-0 mt-0.5" />
-                <span>{error}</span>
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs md:text-sm">
+              {error && (
+                <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-xs font-semibold text-rose-700 flex items-start gap-2 animate-fade-in">
+                  <AlertCircle className="h-4.5 w-4.5 text-rose-500 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Nome Completo <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="Ex: DIONE RESENDE"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-bold uppercase"
+                  required
+                />
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Nome Completo <span className="text-rose-500">*</span></label>
-              <input
-                type="text"
-                placeholder="Ex: DIONE RESENDE"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-bold uppercase"
-                required
-              />
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Função / Cargo <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="Ex: Caldeireiro, Pintor, Torneiro..."
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-semibold"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/10"
+              >
+                <UserPlus className="h-4 w-4" />
+                Cadastrar Colaborador
+              </button>
+            </form>
+          </div>
+
+          {/* Security and Access Card */}
+          {onUpdatePassword && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Settings className="h-4.5 w-4.5 text-blue-500" />
+                Segurança e Acesso
+              </h2>
+              <p className="text-xs text-slate-500">
+                Defina a senha mestra necessária para liberar o acesso ao aplicativo.
+              </p>
+
+              <form onSubmit={handlePasswordChange} className="space-y-4 text-xs md:text-sm">
+                {passError && (
+                  <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-xs font-semibold text-rose-700 flex items-start gap-2">
+                    <AlertCircle className="h-4.5 w-4.5 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{passError}</span>
+                  </div>
+                )}
+
+                {passSuccess && (
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs font-semibold text-emerald-700 flex items-start gap-2">
+                    <Check className="h-4.5 w-4.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Senha atualizada com sucesso!</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Senha Atual</label>
+                  <input
+                    type="password"
+                    placeholder="Sua senha atual..."
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Nova Senha</label>
+                  <input
+                    type="password"
+                    placeholder="Mínimo 4 caracteres..."
+                    value={newPass}
+                    onChange={(e) => setNewPass(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Confirmar Nova Senha</label>
+                  <input
+                    type="password"
+                    placeholder="Repita a nova senha..."
+                    value={confirmPass}
+                    onChange={(e) => setConfirmPass(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-mono"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={passLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/10"
+                >
+                  <Settings className="h-4 w-4" />
+                  {passLoading ? 'Salvando...' : 'Atualizar Senha'}
+                </button>
+              </form>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Função / Cargo <span className="text-rose-500">*</span></label>
-              <input
-                type="text"
-                placeholder="Ex: Caldeireiro, Pintor, Torneiro..."
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 font-semibold"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/10"
-            >
-              <UserPlus className="h-4 w-4" />
-              Cadastrar Colaborador
-            </button>
-          </form>
+          )}
         </div>
 
         {/* Right Column: Registered List */}

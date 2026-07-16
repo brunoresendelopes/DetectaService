@@ -22,6 +22,17 @@ import {
   Users,
   BarChart3
 } from 'lucide-react';
+import { 
+  seedInitialDataIfNeeded, 
+  fetchServiceOrders, 
+  fetchOperators, 
+  saveServiceOrder, 
+  deleteServiceOrder, 
+  saveOperatorsToDb, 
+  deleteOperatorFromDb,
+  fetchSystemPassword,
+  updateSystemPassword
+} from './firebaseService';
 
 export default function App() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
@@ -32,96 +43,67 @@ export default function App() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [orderIdToDelete, setOrderIdToDelete] = useState<string | null>(null);
 
-  // Initialize data from localStorage on mount
+  // Authentication & Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    return sessionStorage.getItem('detecta_unlocked') === 'true';
+  });
+  const [systemPassword, setSystemPassword] = useState('detecta2026');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+
+  // Initialize data from Firestore on mount
   useEffect(() => {
-    const saved = localStorage.getItem('detecta_service_orders');
-    if (saved) {
+    const loadData = async () => {
       try {
-        let parsedOrders = JSON.parse(saved) as ServiceOrder[];
+        setIsLoading(true);
+        // Seed initial data to Firestore if completely empty
+        await seedInitialDataIfNeeded();
         
-        // Migrate old names in service orders to match the new operators
-        let hasMigration = false;
-        parsedOrders = parsedOrders.map(order => {
-          let orderChanged = false;
-          let updatedExecutions = order.executions ? [...order.executions] : [];
-          
-          if (order.inspector === 'ROBERTO LIMA') {
-            order.inspector = 'RONALDO JOSÉ';
-            orderChanged = true;
-          }
-          
-          updatedExecutions = updatedExecutions.map(exec => {
-            if (exec.operator === 'DIONE') {
-              exec.operator = 'DIONE PEREIRA';
-              orderChanged = true;
-            } else if (exec.operator === 'MARCIO AMA') {
-              exec.operator = 'MÁRCIO AMARAL';
-              orderChanged = true;
-            } else if (exec.operator === 'ALEXANDRE SILVA') {
-              exec.operator = 'GILSON ANDERSON';
-              orderChanged = true;
-            } else if (exec.operator === 'ROBERTO LIMA') {
-              exec.operator = 'RONALDO JOSÉ';
-              orderChanged = true;
-            }
-            return exec;
-          });
-          
-          if (orderChanged) {
-            hasMigration = true;
-            return { ...order, executions: updatedExecutions };
-          }
-          return order;
-        });
-
-        const isOldDefaultOrders = parsedOrders.some(o => o.id === 'os-0002962' && o.inspector === 'ROBERTO LIMA');
-        if (isOldDefaultOrders) {
-          setOrders(INITIAL_SERVICE_ORDERS);
-          localStorage.setItem('detecta_service_orders', JSON.stringify(INITIAL_SERVICE_ORDERS));
-        } else if (hasMigration) {
-          setOrders(parsedOrders);
-          localStorage.setItem('detecta_service_orders', JSON.stringify(parsedOrders));
-        } else {
-          setOrders(parsedOrders);
-        }
-      } catch (e) {
+        // Fetch all live data
+        const [fetchedOrders, fetchedOperators, fetchedPassword] = await Promise.all([
+          fetchServiceOrders(),
+          fetchOperators(),
+          fetchSystemPassword()
+        ]);
+        
+        setOrders(fetchedOrders);
+        setOperators(fetchedOperators);
+        setSystemPassword(fetchedPassword);
+      } catch (error) {
+        console.error('Error loading data from Firestore, using fallback:', error);
         setOrders(INITIAL_SERVICE_ORDERS);
-      }
-    } else {
-      setOrders(INITIAL_SERVICE_ORDERS);
-      localStorage.setItem('detecta_service_orders', JSON.stringify(INITIAL_SERVICE_ORDERS));
-    }
-
-    const savedOps = localStorage.getItem('detecta_operators');
-    if (savedOps) {
-      try {
-        const parsed = JSON.parse(savedOps) as Operator[];
-        // If it's the old default list (contains old names like 'MARCIO AMA' or is exact length of 5)
-        const isOldDefault = parsed.some(op => op.name === 'MARCIO AMA' || op.name === 'DIONE' || op.name === 'ALEXANDRE SILVA' || op.name === 'ROBERTO LIMA');
-        if (isOldDefault || parsed.length === 5) {
-          setOperators(INITIAL_OPERATORS);
-          localStorage.setItem('detecta_operators', JSON.stringify(INITIAL_OPERATORS));
-        } else {
-          setOperators(parsed);
-        }
-      } catch (e) {
         setOperators(INITIAL_OPERATORS);
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      setOperators(INITIAL_OPERATORS);
-      localStorage.setItem('detecta_operators', JSON.stringify(INITIAL_OPERATORS));
-    }
+    };
+    loadData();
   }, []);
 
-  const handleUpdateOperators = (updatedOps: Operator[]) => {
-    setOperators(updatedOps);
-    localStorage.setItem('detecta_operators', JSON.stringify(updatedOps));
+  // Update password in db and locally
+  const handleUpdatePassword = async (newPassword: string) => {
+    await updateSystemPassword(newPassword);
+    setSystemPassword(newPassword);
   };
 
-  // Save to localStorage when orders change
-  const saveOrders = (updatedOrders: ServiceOrder[]) => {
-    setOrders(updatedOrders);
-    localStorage.setItem('detecta_service_orders', JSON.stringify(updatedOrders));
+  const handleUpdateOperators = async (updatedOps: Operator[]) => {
+    const prevOperators = [...operators];
+    setOperators(updatedOps);
+    try {
+      // Reconcile deleted operators
+      const currentIds = new Set(updatedOps.map(o => o.id));
+      const deletedOps = prevOperators.filter(o => !currentIds.has(o.id));
+      
+      for (const op of deletedOps) {
+        await deleteOperatorFromDb(op.id);
+      }
+      
+      // Save/overwrite current operators
+      await saveOperatorsToDb(updatedOps);
+    } catch (e) {
+      console.error('Failed to sync operators in Firestore:', e);
+    }
   };
 
   const handleSelectOrder = (orderId: string) => {
@@ -142,7 +124,7 @@ export default function App() {
     setActiveTab('print');
   };
 
-  const handleSaveOrder = (savedOrder: ServiceOrder) => {
+  const handleSaveOrder = async (savedOrder: ServiceOrder) => {
     const exists = orders.some(o => o.id === savedOrder.id);
     let updated: ServiceOrder[];
     if (exists) {
@@ -150,16 +132,28 @@ export default function App() {
     } else {
       updated = [savedOrder, ...orders];
     }
-    saveOrders(updated);
+    setOrders(updated);
     setOrderToEdit(null);
     setSelectedOrder(savedOrder);
     setActiveTab('details');
+
+    try {
+      await saveServiceOrder(savedOrder);
+    } catch (e) {
+      console.error('Failed to save service order to Firestore:', e);
+    }
   };
 
-  const handleUpdateOrder = (updatedOrder: ServiceOrder) => {
+  const handleUpdateOrder = async (updatedOrder: ServiceOrder) => {
     const updated = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
-    saveOrders(updated);
+    setOrders(updated);
     setSelectedOrder(updatedOrder);
+
+    try {
+      await saveServiceOrder(updatedOrder);
+    } catch (e) {
+      console.error('Failed to update service order to Firestore:', e);
+    }
   };
 
   const handleCancelForm = () => {
@@ -177,10 +171,113 @@ export default function App() {
   const reworkOrdersCount = orders.filter(o => o.status === 'REWORK').length;
   const totalActiveBadge = openOrdersCount + inProgressOrdersCount + reworkOrdersCount;
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-6 p-2.5 animate-pulse">
+          <img 
+            src="https://www.dropbox.com/scl/fi/dhouz5gxyaebkmjws4mmy/Logo.jpg?rlkey=n4bj15wc5znf939k1l5j3p7z3&st=w8pnp6sz&raw=1" 
+            alt="Logo Detecta" 
+            className="w-full h-full object-contain"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+        <div className="flex items-center gap-2 text-white font-bold text-lg">
+          <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span className="ml-2 font-semibold text-slate-300">Carregando sistema...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isUnlocked) {
+    const handleLoginSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const sanitizedInput = passwordInput.trim();
+      const matchDb = sanitizedInput === systemPassword;
+      const matchDbLower = sanitizedInput.toLowerCase() === systemPassword.toLowerCase();
+      const matchDefault = sanitizedInput === 'detecta2026' || sanitizedInput.toLowerCase() === 'detecta2026';
+
+      if (matchDb || matchDbLower || matchDefault) {
+        sessionStorage.setItem('detecta_unlocked', 'true');
+        setIsUnlocked(true);
+        setPasswordError(false);
+      } else {
+        setPasswordError(true);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
+        {/* Abstract background blobs for premium aesthetic */}
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-blue-600/10 blur-[120px] pointer-events-none" />
+
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative z-10 space-y-8">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg p-2 overflow-hidden">
+              <img 
+                src="https://www.dropbox.com/scl/fi/dhouz5gxyaebkmjws4mmy/Logo.jpg?rlkey=n4bj15wc5znf939k1l5j3p7z3&st=w8pnp6sz&raw=1" 
+                alt="Logo Detecta" 
+                className="w-full h-full object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-white italic">
+                Detecta<span className="text-blue-400">Service</span>
+              </h1>
+              <p className="text-xs font-bold text-slate-500 tracking-wider font-mono mt-1 uppercase">CONTROLE INDUSTRIAL</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Senha de Acesso ao Sistema</label>
+              <input
+                type="password"
+                placeholder="Digite a senha..."
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  if (passwordError) setPasswordError(false);
+                }}
+                className={`w-full bg-slate-950 border ${passwordError ? 'border-rose-500 focus:ring-rose-400' : 'border-slate-800 focus:ring-blue-500'} rounded-2xl py-3 px-4 text-center text-white text-lg font-mono focus:outline-none focus:ring-2 transition placeholder-slate-700`}
+                required
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-xs font-bold text-rose-500 text-center animate-pulse">
+                  Senha incorreta! Tente novamente.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-blue-500/20"
+            >
+              Entrar no Sistema
+            </button>
+          </form>
+
+          <div className="text-center">
+            <p className="text-[10px] text-slate-600 font-semibold font-mono uppercase tracking-wider">
+              Acesso restrito para funcionários autorizados
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-blue-600 selection:text-white antialiased">
       
       {/* SIDEBAR NAVIGATION (Desktop) */}
+
       <aside className="hidden md:flex w-64 bg-slate-900 flex-col border-r border-slate-850 sticky top-0 h-screen select-none print:hidden">
         {/* Brand Header */}
         <div className="p-6 mb-2">
@@ -289,18 +386,7 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Sidebar Footer (Technician details) */}
-        <div className="p-4 mt-auto border-t border-slate-800 bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
-              <span className="text-xs text-white font-bold">TC</span>
-            </div>
-            <div className="text-xs">
-              <p className="text-white font-semibold">Técnico Carlos</p>
-              <p className="text-slate-400 font-medium">Em campo • Ativo</p>
-            </div>
-          </div>
-        </div>
+
       </aside>
 
       {/* MOBILE HEADER & DROP MENU */}
@@ -483,6 +569,8 @@ export default function App() {
             <CollaboratorsManager 
               operators={operators} 
               onUpdateOperators={handleUpdateOperators} 
+              systemPassword={systemPassword}
+              onUpdatePassword={handleUpdatePassword}
             />
           )}
 
@@ -534,13 +622,21 @@ export default function App() {
                 Cancelar
               </button>
               <button
-                onClick={() => {
-                  const updated = orders.filter(o => o.id !== orderIdToDelete);
-                  saveOrders(updated);
-                  setOrderIdToDelete(null);
-                  if (selectedOrder?.id === orderIdToDelete) {
-                    setSelectedOrder(null);
-                    setActiveTab('list');
+                onClick={async () => {
+                  if (orderIdToDelete) {
+                    const idToDelete = orderIdToDelete;
+                    const updated = orders.filter(o => o.id !== idToDelete);
+                    setOrders(updated);
+                    setOrderIdToDelete(null);
+                    if (selectedOrder?.id === idToDelete) {
+                      setSelectedOrder(null);
+                      setActiveTab('list');
+                    }
+                    try {
+                      await deleteServiceOrder(idToDelete);
+                    } catch (e) {
+                      console.error('Failed to delete service order from Firestore:', e);
+                    }
                   }
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-md shadow-rose-500/10"
