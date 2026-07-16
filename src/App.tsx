@@ -46,7 +46,7 @@ export default function App() {
   // Authentication & Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [isUnlocked, setIsUnlocked] = useState(() => {
-    return sessionStorage.getItem('detecta_unlocked') === 'true';
+    return localStorage.getItem('detecta_unlocked') === 'true';
   });
   const [systemPassword, setSystemPassword] = useState('detecta2026');
   const [passwordInput, setPasswordInput] = useState('');
@@ -226,7 +226,7 @@ export default function App() {
       const matchDefault = sanitizedInput === 'detecta2026' || sanitizedInput.toLowerCase() === 'detecta2026';
 
       if (matchDb || matchDbLower || matchDefault) {
-        sessionStorage.setItem('detecta_unlocked', 'true');
+        localStorage.setItem('detecta_unlocked', 'true');
         setIsUnlocked(true);
         setPasswordError(false);
       } else {
