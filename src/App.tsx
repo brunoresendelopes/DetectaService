@@ -35,13 +35,31 @@ import {
 } from './firebaseService';
 
 export default function App() {
-  const [orders, setOrders] = useState<ServiceOrder[]>([]);
+  const [orders, setOrders] = useState<ServiceOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('detecta_orders');
+      return saved ? JSON.parse(saved) : INITIAL_SERVICE_ORDERS;
+    } catch {
+      return INITIAL_SERVICE_ORDERS;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'create' | 'details' | 'print' | 'collaborators' | 'reports'>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [orderToEdit, setOrderToEdit] = useState<ServiceOrder | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [operators, setOperators] = useState<Operator[]>([]);
+  const [operators, setOperators] = useState<Operator[]>(() => {
+    try {
+      const saved = localStorage.getItem('detecta_operators');
+      return saved ? JSON.parse(saved) : INITIAL_OPERATORS;
+    } catch {
+      return INITIAL_OPERATORS;
+    }
+  });
   const [orderIdToDelete, setOrderIdToDelete] = useState<string | null>(null);
+
+  // Connection/Sync states
+  const [syncStatus, setSyncStatus] = useState<'connecting' | 'synced' | 'local'>('connecting');
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Authentication & Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -60,38 +78,70 @@ export default function App() {
 
     const initFirebaseSync = async () => {
       try {
-        setIsLoading(true);
+        setSyncStatus('connecting');
         // Seed initial data to Firestore if completely empty
         await seedInitialDataIfNeeded();
 
         // Subscribe to Service Orders in Real-Time
-        unsubscribeOrders = subscribeServiceOrders((liveOrders) => {
-          setOrders(liveOrders);
-          
-          // Also keep the currently selected order up-to-date with any edits made elsewhere!
-          setSelectedOrder(prevSelected => {
-            if (!prevSelected) return null;
-            const updated = liveOrders.find(o => o.id === prevSelected.id);
-            return updated || null;
-          });
-          
-          setIsLoading(false);
-        });
+        unsubscribeOrders = subscribeServiceOrders(
+          (liveOrders) => {
+            setOrders(liveOrders);
+            try {
+              localStorage.setItem('detecta_orders', JSON.stringify(liveOrders));
+            } catch (err) {
+              console.error('Failed to save orders to localStorage:', err);
+            }
+            
+            // Also keep the currently selected order up-to-date with any edits made elsewhere!
+            setSelectedOrder(prevSelected => {
+              if (!prevSelected) return null;
+              const updated = liveOrders.find(o => o.id === prevSelected.id);
+              return updated || null;
+            });
+            
+            setIsLoading(false);
+            setSyncStatus('synced');
+            setSyncError(null);
+          },
+          (error) => {
+            console.error('Error listening to service orders updates:', error);
+            setSyncStatus('local');
+            setSyncError(error?.message || 'Erro de conexão ou permissão com o banco de dados');
+            setIsLoading(false);
+          }
+        );
 
         // Subscribe to Operators in Real-Time
-        unsubscribeOperators = subscribeOperators((liveOperators) => {
-          setOperators(liveOperators);
-        });
+        unsubscribeOperators = subscribeOperators(
+          (liveOperators) => {
+            setOperators(liveOperators);
+            try {
+              localStorage.setItem('detecta_operators', JSON.stringify(liveOperators));
+            } catch (err) {
+              console.error('Failed to save operators to localStorage:', err);
+            }
+          },
+          (error) => {
+            console.error('Error listening to operators updates:', error);
+            setSyncStatus('local');
+            setSyncError(error?.message || 'Erro de conexão ou permissão com o banco de dados');
+          }
+        );
 
         // Subscribe to Password in Real-Time
-        unsubscribePassword = subscribeSystemPassword((livePassword) => {
-          setSystemPassword(livePassword);
-        });
+        unsubscribePassword = subscribeSystemPassword(
+          (livePassword) => {
+            setSystemPassword(livePassword);
+          },
+          (error) => {
+            console.error('Error listening to password updates:', error);
+          }
+        );
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error starting real-time sync with Firestore:', error);
-        setOrders([]);
-        setOperators([]);
+        setSyncStatus('local');
+        setSyncError(error?.message || 'Erro ao inicializar conexão com o banco de dados');
         setIsLoading(false);
       }
     };
@@ -115,6 +165,11 @@ export default function App() {
   const handleUpdateOperators = async (updatedOps: Operator[]) => {
     const prevOperators = [...operators];
     setOperators(updatedOps);
+    try {
+      localStorage.setItem('detecta_operators', JSON.stringify(updatedOps));
+    } catch (err) {
+      console.error('Failed to save operators to localStorage:', err);
+    }
     try {
       // Reconcile deleted operators
       const currentIds = new Set(updatedOps.map(o => o.id));
@@ -158,26 +213,40 @@ export default function App() {
       updated = [savedOrder, ...orders];
     }
     setOrders(updated);
+    try {
+      localStorage.setItem('detecta_orders', JSON.stringify(updated));
+    } catch (err) {
+      console.error('Failed to save orders to localStorage:', err);
+    }
     setOrderToEdit(null);
     setSelectedOrder(savedOrder);
     setActiveTab('details');
 
     try {
       await saveServiceOrder(savedOrder);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to save service order to Firestore:', e);
+      setSyncStatus('local');
+      setSyncError(e?.message || 'Não foi possível salvar na nuvem');
     }
   };
 
   const handleUpdateOrder = async (updatedOrder: ServiceOrder) => {
     const updated = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
     setOrders(updated);
+    try {
+      localStorage.setItem('detecta_orders', JSON.stringify(updated));
+    } catch (err) {
+      console.error('Failed to save orders to localStorage:', err);
+    }
     setSelectedOrder(updatedOrder);
 
     try {
       await saveServiceOrder(updatedOrder);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to update service order to Firestore:', e);
+      setSyncStatus('local');
+      setSyncError(e?.message || 'Não foi possível salvar na nuvem');
     }
   };
 
@@ -415,15 +484,26 @@ export default function App() {
         <div className="p-4 border-t border-slate-800 text-slate-400 text-xs flex flex-col gap-1.5 bg-slate-950/45 shrink-0 select-none">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              {syncStatus !== 'local' && (
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  syncStatus === 'synced' ? 'bg-emerald-400' : 'bg-blue-400'
+                }`}></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                syncStatus === 'synced' ? 'bg-emerald-500' : syncStatus === 'connecting' ? 'bg-blue-500' : 'bg-amber-500'
+              }`}></span>
             </span>
             <span className="font-bold text-slate-300 font-mono tracking-wider text-[10px] uppercase">
-              Sincronizado
+              {syncStatus === 'synced' ? 'Sincronizado' : syncStatus === 'connecting' ? 'Sincronizando...' : 'Modo Local'}
             </span>
           </div>
           <p className="text-[10px] text-slate-500 leading-normal">
-            Conectado em tempo real ao banco de dados Cloud.
+            {syncStatus === 'synced' 
+              ? 'Conectado em tempo real ao banco de dados Cloud.' 
+              : syncStatus === 'connecting' 
+                ? 'Estabelecendo conexão segura com a nuvem...' 
+                : `Salvo offline no navegador. ${syncError ? `Erro: ${syncError}` : 'Sem conexão com a nuvem.'}`
+            }
           </p>
         </div>
 
@@ -519,11 +599,24 @@ export default function App() {
           
           <div className="pt-2.5 mt-1 border-t border-slate-800 flex items-center gap-2 px-2.5 select-none">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              {syncStatus !== 'local' && (
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  syncStatus === 'synced' ? 'bg-emerald-400' : 'bg-blue-400'
+                }`}></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                syncStatus === 'synced' ? 'bg-emerald-500' : syncStatus === 'connecting' ? 'bg-blue-500' : 'bg-amber-500'
+              }`}></span>
             </span>
-            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider font-mono">
-              Sincronizado em tempo real
+            <span className={`text-[10px] font-bold uppercase tracking-wider font-mono ${
+              syncStatus === 'synced' ? 'text-emerald-400' : syncStatus === 'connecting' ? 'text-blue-400' : 'text-amber-400'
+            }`}>
+              {syncStatus === 'synced' 
+                ? 'Sincronizado em tempo real' 
+                : syncStatus === 'connecting' 
+                  ? 'Sincronizando com a nuvem...' 
+                  : 'Salvo localmente (Offline)'
+              }
             </span>
           </div>
         </div>
@@ -612,6 +705,7 @@ export default function App() {
               onPrintOrder={handlePrintOrder}
               operators={operators}
               onDeleteOrder={(orderId) => setOrderIdToDelete(orderId)}
+              onEditOrder={handleEditOrder}
             />
           )}
 
@@ -684,6 +778,11 @@ export default function App() {
                     const idToDelete = orderIdToDelete;
                     const updated = orders.filter(o => o.id !== idToDelete);
                     setOrders(updated);
+                    try {
+                      localStorage.setItem('detecta_orders', JSON.stringify(updated));
+                    } catch (err) {
+                      console.error('Failed to save orders to localStorage:', err);
+                    }
                     setOrderIdToDelete(null);
                     if (selectedOrder?.id === idToDelete) {
                       setSelectedOrder(null);
@@ -691,8 +790,10 @@ export default function App() {
                     }
                     try {
                       await deleteServiceOrder(idToDelete);
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error('Failed to delete service order from Firestore:', e);
+                      setSyncStatus('local');
+                      setSyncError(e?.message || 'Não foi possível excluir da nuvem');
                     }
                   }
                 }}

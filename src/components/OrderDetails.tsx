@@ -15,7 +15,8 @@ import {
   FileText,
   Check,
   Play,
-  Briefcase
+  Briefcase,
+  Pencil
 } from 'lucide-react';
 
 interface OrderDetailsProps {
@@ -25,6 +26,7 @@ interface OrderDetailsProps {
   onPrintOrder: (order: ServiceOrder) => void;
   operators: Operator[];
   onDeleteOrder: (orderId: string) => void;
+  onEditOrder: (order: ServiceOrder) => void;
 }
 
 export default function OrderDetails({ 
@@ -33,7 +35,8 @@ export default function OrderDetails({
   onUpdateOrder, 
   onPrintOrder,
   operators,
-  onDeleteOrder
+  onDeleteOrder,
+  onEditOrder
 }: OrderDetailsProps) {
   const [showLogForm, setShowLogForm] = useState(false);
   
@@ -361,6 +364,15 @@ export default function OrderDetails({
         </button>
 
         <div className="flex flex-wrap gap-2.5">
+          <button
+            onClick={() => onEditOrder(order)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer shadow-md shadow-blue-500/10"
+            id="btn-edit-order-full"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Editar O.S. (Geral)
+          </button>
+
           <button
             onClick={() => onPrintOrder(order)}
             className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer border border-slate-200 shadow-sm"

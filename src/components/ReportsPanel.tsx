@@ -114,6 +114,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
       orderRework: boolean;
       regularHours: number;
       overtimeHours: number;
+      drawingNumber?: string;
     }> = [];
 
     // Step 1: Collect executions and match with parent order info
@@ -135,15 +136,16 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
         // Section checks
         if (selectedSection !== 'ALL' && exec.section.toUpperCase() !== selectedSection.toUpperCase()) return;
 
-        // Activity search matches subServices descriptions, details, or section name
+        // Activity search matches subServices descriptions, details, drawingNumber (Atividade) or section name
         if (activitySearch.trim()) {
           const query = activitySearch.toLowerCase();
           const matchesSubservices = order.subServices?.some(sub => sub.description.toLowerCase().includes(query));
           const matchesDetails = order.details.toLowerCase().includes(query);
           const matchesSection = exec.section.toLowerCase().includes(query);
           const matchesOperator = exec.operator.toLowerCase().includes(query);
+          const matchesDrawingNumber = order.drawingNumber?.toLowerCase().includes(query);
           
-          if (!matchesSubservices && !matchesDetails && !matchesSection && !matchesOperator) return;
+          if (!matchesSubservices && !matchesDetails && !matchesSection && !matchesOperator && !matchesDrawingNumber) return;
         }
 
         const overtimeInfo = calculateOvertime(
@@ -163,7 +165,8 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           orderStatus: order.status,
           orderRework: order.rework,
           regularHours: overtimeInfo.regularHours,
-          overtimeHours: overtimeInfo.overtimeHours
+          overtimeHours: overtimeInfo.overtimeHours,
+          drawingNumber: order.drawingNumber
         });
       });
     });
@@ -544,6 +547,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                     <th className="py-3 px-5">DATA</th>
                     <th className="py-3 px-4">O.S. CODE</th>
                     <th className="py-3 px-4">CLIENTE</th>
+                    <th className="py-3 px-4">ATIVIDADE</th>
                     <th className="py-3 px-4">COLABORADOR</th>
                     <th className="py-3 px-4">SEÇÃO</th>
                     <th className="py-3 px-4">HORÁRIO</th>
@@ -561,6 +565,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         <td className="py-3.5 px-5 text-slate-500 font-mono text-[11px]">{formattedDate}</td>
                         <td className="py-3.5 px-4 font-mono font-bold text-blue-600">#{item.orderCode}</td>
                         <td className="py-3.5 px-4 text-slate-800 text-[11px]">{item.client}</td>
+                        <td className="py-3.5 px-4 text-slate-900 font-bold uppercase text-[11px]">{item.drawingNumber || '-'}</td>
                         <td className="py-3.5 px-4 text-slate-900 font-bold uppercase">{item.exec.operator}</td>
                         <td className="py-3.5 px-4">
                           {item.exec.section ? (
@@ -766,6 +771,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         <th className="py-2 px-3">DATA</th>
                         <th className="py-2 px-2">O.S.</th>
                         <th className="py-2 px-2">CLIENTE</th>
+                        <th className="py-2 px-2">ATIVIDADE</th>
                         <th className="py-2 px-2">SEÇÃO</th>
                         <th className="py-2 px-2">COLABORADOR</th>
                         <th className="py-2 px-2 text-right">REGULAR</th>
@@ -781,6 +787,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                             <td className="py-2 px-3 font-mono">{formattedDate}</td>
                             <td className="py-2 px-2 font-mono font-bold">#{item.orderCode}</td>
                             <td className="py-2 px-2 max-w-[120px] truncate">{item.client}</td>
+                            <td className="py-2 px-2 uppercase font-bold text-[10px] max-w-[120px] truncate">{item.drawingNumber || '-'}</td>
                             <td className="py-2 px-2 font-mono text-[10px]">{item.exec.section}</td>
                             <td className="py-2 px-2 uppercase font-bold text-[10px]">{item.exec.operator}</td>
                             <td className="py-2 px-2 text-right font-mono">{formatHours(item.regularHours)}</td>

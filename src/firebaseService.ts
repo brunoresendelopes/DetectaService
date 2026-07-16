@@ -19,6 +19,29 @@ const OPERATORS_COLLECTION = 'operators';
 const CONFIG_COLLECTION = 'config';
 
 /**
+ * Recursively removes all undefined properties from an object so Firestore doesn't reject it.
+ */
+function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined) as any;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = (obj as any)[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanUndefined(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+/**
  * Seeds initial data to Firestore if the system has not been initialized yet.
  */
 export async function seedInitialDataIfNeeded() {
@@ -39,7 +62,7 @@ export async function seedInitialDataIfNeeded() {
     const opBatch = writeBatch(db);
     for (const op of INITIAL_OPERATORS) {
       const opRef = doc(db, OPERATORS_COLLECTION, op.id);
-      opBatch.set(opRef, op);
+      opBatch.set(opRef, cleanUndefined(op));
     }
     await opBatch.commit();
 
@@ -48,17 +71,17 @@ export async function seedInitialDataIfNeeded() {
     const orderBatch = writeBatch(db);
     for (const order of INITIAL_SERVICE_ORDERS) {
       const orderRef = doc(db, ORDERS_COLLECTION, order.id);
-      orderBatch.set(orderRef, order);
+      orderBatch.set(orderRef, cleanUndefined(order));
     }
     await orderBatch.commit();
 
     // Mark system as initialized and set default password
     console.log('Seeding system configuration and password...');
-    await setDoc(passwordDocRef, { 
+    await setDoc(passwordDocRef, cleanUndefined({ 
       password: 'detecta2026',
       initialized: true,
       initializedAt: new Date().toISOString()
-    });
+    }));
   } catch (error) {
     console.error('Error seeding initial data:', error);
   }
@@ -105,7 +128,7 @@ export async function fetchOperators(): Promise<Operator[]> {
 export async function saveServiceOrder(order: ServiceOrder): Promise<void> {
   try {
     const docRef = doc(db, ORDERS_COLLECTION, order.id);
-    await setDoc(docRef, order);
+    await setDoc(docRef, cleanUndefined(order));
   } catch (error) {
     console.error('Error saving service order:', error);
     throw error;
@@ -136,7 +159,7 @@ export async function saveOperatorsToDb(operators: Operator[]): Promise<void> {
     const batch = writeBatch(db);
     for (const op of operators) {
       const docRef = doc(db, OPERATORS_COLLECTION, op.id);
-      batch.set(docRef, op);
+      batch.set(docRef, cleanUndefined(op));
     }
     await batch.commit();
   } catch (error) {
@@ -151,7 +174,7 @@ export async function saveOperatorsToDb(operators: Operator[]): Promise<void> {
 export async function saveOperator(op: Operator): Promise<void> {
   try {
     const docRef = doc(db, OPERATORS_COLLECTION, op.id);
-    await setDoc(docRef, op);
+    await setDoc(docRef, cleanUndefined(op));
   } catch (error) {
     console.error('Error saving operator:', error);
     throw error;
@@ -194,7 +217,7 @@ export async function fetchSystemPassword(): Promise<string> {
 export async function updateSystemPassword(newPassword: string): Promise<void> {
   try {
     const docRef = doc(db, CONFIG_COLLECTION, 'system');
-    await setDoc(docRef, { password: newPassword }, { merge: true });
+    await setDoc(docRef, cleanUndefined({ password: newPassword }), { merge: true });
   } catch (error) {
     console.error('Error updating system password:', error);
     throw error;
@@ -204,7 +227,7 @@ export async function updateSystemPassword(newPassword: string): Promise<void> {
 /**
  * Subscribe to real-time service orders updates across devices.
  */
-export function subscribeServiceOrders(onUpdate: (orders: ServiceOrder[]) => void) {
+export function subscribeServiceOrders(onUpdate: (orders: ServiceOrder[]) => void, onError?: (error: any) => void) {
   const q = collection(db, ORDERS_COLLECTION);
   return onSnapshot(q, (snapshot) => {
     const orders: ServiceOrder[] = [];
@@ -227,13 +250,14 @@ export function subscribeServiceOrders(onUpdate: (orders: ServiceOrder[]) => voi
     onUpdate(orders);
   }, (error) => {
     console.error('Error listening to service orders updates:', error);
+    if (onError) onError(error);
   });
 }
 
 /**
  * Subscribe to real-time operators updates across devices.
  */
-export function subscribeOperators(onUpdate: (operators: Operator[]) => void) {
+export function subscribeOperators(onUpdate: (operators: Operator[]) => void, onError?: (error: any) => void) {
   const q = collection(db, OPERATORS_COLLECTION);
   return onSnapshot(q, (snapshot) => {
     const operators: Operator[] = [];
@@ -256,13 +280,14 @@ export function subscribeOperators(onUpdate: (operators: Operator[]) => void) {
     onUpdate(operators);
   }, (error) => {
     console.error('Error listening to operators updates:', error);
+    if (onError) onError(error);
   });
 }
 
 /**
  * Subscribe to real-time system password updates across devices.
  */
-export function subscribeSystemPassword(onUpdate: (password: string) => void) {
+export function subscribeSystemPassword(onUpdate: (password: string) => void, onError?: (error: any) => void) {
   const docRef = doc(db, CONFIG_COLLECTION, 'system');
   return onSnapshot(docRef, (docSnap) => {
     if (docSnap.exists()) {
@@ -272,5 +297,6 @@ export function subscribeSystemPassword(onUpdate: (password: string) => void) {
     }
   }, (error) => {
     console.error('Error listening to system password updates:', error);
+    if (onError) onError(error);
   });
 }
