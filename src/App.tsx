@@ -24,14 +24,14 @@ import {
 } from 'lucide-react';
 import { 
   seedInitialDataIfNeeded, 
-  fetchServiceOrders, 
-  fetchOperators, 
   saveServiceOrder, 
   deleteServiceOrder, 
   saveOperatorsToDb, 
   deleteOperatorFromDb,
-  fetchSystemPassword,
-  updateSystemPassword
+  updateSystemPassword,
+  subscribeServiceOrders,
+  subscribeOperators,
+  subscribeSystemPassword
 } from './firebaseService';
 
 export default function App() {
@@ -52,33 +52,58 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
 
-  // Initialize data from Firestore on mount
+  // Initialize data from Firestore on mount with real-time listeners
   useEffect(() => {
-    const loadData = async () => {
+    let unsubscribeOrders: (() => void) | undefined;
+    let unsubscribeOperators: (() => void) | undefined;
+    let unsubscribePassword: (() => void) | undefined;
+
+    const initFirebaseSync = async () => {
       try {
         setIsLoading(true);
         // Seed initial data to Firestore if completely empty
         await seedInitialDataIfNeeded();
-        
-        // Fetch all live data
-        const [fetchedOrders, fetchedOperators, fetchedPassword] = await Promise.all([
-          fetchServiceOrders(),
-          fetchOperators(),
-          fetchSystemPassword()
-        ]);
-        
-        setOrders(fetchedOrders);
-        setOperators(fetchedOperators);
-        setSystemPassword(fetchedPassword);
+
+        // Subscribe to Service Orders in Real-Time
+        unsubscribeOrders = subscribeServiceOrders((liveOrders) => {
+          setOrders(liveOrders);
+          
+          // Also keep the currently selected order up-to-date with any edits made elsewhere!
+          setSelectedOrder(prevSelected => {
+            if (!prevSelected) return null;
+            const updated = liveOrders.find(o => o.id === prevSelected.id);
+            return updated || null;
+          });
+          
+          setIsLoading(false);
+        });
+
+        // Subscribe to Operators in Real-Time
+        unsubscribeOperators = subscribeOperators((liveOperators) => {
+          setOperators(liveOperators);
+        });
+
+        // Subscribe to Password in Real-Time
+        unsubscribePassword = subscribeSystemPassword((livePassword) => {
+          setSystemPassword(livePassword);
+        });
+
       } catch (error) {
-        console.error('Error loading data from Firestore, using fallback:', error);
-        setOrders(INITIAL_SERVICE_ORDERS);
-        setOperators(INITIAL_OPERATORS);
-      } finally {
+        console.error('Error starting real-time sync with Firestore:', error);
+        setOrders([]);
+        setOperators([]);
         setIsLoading(false);
       }
     };
-    loadData();
+
+    initFirebaseSync();
+
+    // Clean up listeners on unmount
+    return () => {
+      if (unsubscribeOrders) unsubscribeOrders();
+      if (unsubscribeOperators) unsubscribeOperators();
+      if (unsubscribePassword) unsubscribePassword();
+    };
   }, []);
 
   // Update password in db and locally

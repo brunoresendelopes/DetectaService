@@ -146,7 +146,14 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           if (!matchesSubservices && !matchesDetails && !matchesSection && !matchesOperator) return;
         }
 
-        const overtimeInfo = calculateOvertime(exec.date, exec.startTime, exec.endTime);
+        const overtimeInfo = calculateOvertime(
+          exec.date, 
+          exec.startTime, 
+          exec.endTime,
+          exec.discountLunch !== false,
+          exec.lunchStart || '12:00',
+          exec.lunchEnd || '13:00'
+        );
 
         matchedExecutions.push({
           exec,
@@ -556,9 +563,13 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         <td className="py-3.5 px-4 text-slate-800 text-[11px]">{item.client}</td>
                         <td className="py-3.5 px-4 text-slate-900 font-bold uppercase">{item.exec.operator}</td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center text-[10px] font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md font-mono">
-                            {item.exec.section}
-                          </span>
+                          {item.exec.section ? (
+                            <span className="inline-flex items-center text-[10px] font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md font-mono">
+                              {item.exec.section}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">-</span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                           {item.exec.startTime}h - {item.exec.endTime}h

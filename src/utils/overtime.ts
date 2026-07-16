@@ -3,7 +3,14 @@ export interface OvertimeResult {
   overtimeHours: number; // Decimal hours
 }
 
-export function calculateOvertime(dateStr: string, startTimeStr: string, endTimeStr: string): OvertimeResult {
+export function calculateOvertime(
+  dateStr: string, 
+  startTimeStr: string, 
+  endTimeStr: string,
+  discountLunch: boolean = true,
+  lunchStartStr: string = '12:00',
+  lunchEndStr: string = '13:00'
+): OvertimeResult {
   // Parse date safely
   const parts = dateStr.split('-');
   if (parts.length !== 3) {
@@ -23,11 +30,12 @@ export function calculateOvertime(dateStr: string, startTimeStr: string, endTime
   };
 
   const startMinutes = parseToMinutes(startTimeStr);
-  const endMinutes = parseToMinutes(endTimeStr);
+  let endMinutes = parseToMinutes(endTimeStr);
 
-  const totalMinutes = endMinutes - startMinutes;
+  let totalMinutes = endMinutes - startMinutes;
   if (totalMinutes <= 0) {
-    return { regularHours: 0, overtimeHours: 0 };
+    totalMinutes += 24 * 60; // overnight
+    endMinutes += 24 * 60;
   }
 
   // Define regular interval for each day of the week:
@@ -45,20 +53,71 @@ export function calculateOvertime(dateStr: string, startTimeStr: string, endTime
     regEnd = 16 * 60; // 960
   }
 
-  // Calculate regular minutes by finding overlap of [startMinutes, endMinutes] and [regStart, regEnd]
-  let regularMinutes = 0;
+  // Calculate raw regular minutes by finding overlap of [startMinutes, endMinutes] and [regStart, regEnd]
+  let rawRegularMinutes = 0;
   if (regStart < regEnd) {
     const overlapStart = Math.max(startMinutes, regStart);
     const overlapEnd = Math.min(endMinutes, regEnd);
     if (overlapStart < overlapEnd) {
-      regularMinutes = overlapEnd - overlapStart;
+      rawRegularMinutes = overlapEnd - overlapStart;
     }
   }
 
-  const overtimeMinutes = totalMinutes - regularMinutes;
+  let rawOvertimeMinutes = totalMinutes - rawRegularMinutes;
+
+  let lunchInRegular = 0;
+  let lunchInOvertime = 0;
+
+  if (discountLunch) {
+    const lStart = parseToMinutes(lunchStartStr);
+    const lEnd = parseToMinutes(lunchEndStr);
+
+    if (lStart < lEnd) {
+      // Find overlap of worked period with lunch on Day 1
+      const lunchOverlapStart1 = Math.max(startMinutes, lStart);
+      const lunchOverlapEnd1 = Math.min(endMinutes, lEnd);
+      let day1LunchOverlap = 0;
+      if (lunchOverlapStart1 < lunchOverlapEnd1) {
+        day1LunchOverlap = lunchOverlapEnd1 - lunchOverlapStart1;
+      }
+
+      // Find overlap of worked period with lunch on Day 2 (for overnight shifts)
+      const lunchOverlapStart2 = Math.max(startMinutes, lStart + 1440);
+      const lunchOverlapEnd2 = Math.min(endMinutes, lEnd + 1440);
+      let day2LunchOverlap = 0;
+      if (lunchOverlapStart2 < lunchOverlapEnd2) {
+        day2LunchOverlap = lunchOverlapEnd2 - lunchOverlapStart2;
+      }
+
+      const totalLunchOverlap = day1LunchOverlap + day2LunchOverlap;
+
+      // Now determine how much of that lunch overlap is within regular hours
+      // Day 1 Regular hours interval is [regStart, regEnd]
+      if (regStart < regEnd) {
+        const regLunchStart1 = Math.max(lunchOverlapStart1, regStart);
+        const regLunchEnd1 = Math.min(lunchOverlapEnd1, regEnd);
+        if (regLunchStart1 < regLunchEnd1) {
+          lunchInRegular += (regLunchEnd1 - regLunchStart1);
+        }
+
+        // Day 2 Regular hours (if shift goes overnight, we can check if it overlaps with Day 2's regular hours as well)
+        const regLunchStart2 = Math.max(lunchOverlapStart2, regStart + 1440);
+        const regLunchEnd2 = Math.min(lunchOverlapEnd2, regEnd + 1440);
+        if (regLunchStart2 < regLunchEnd2) {
+          lunchInRegular += (regLunchEnd2 - regLunchStart2);
+        }
+      }
+
+      // Anything that is lunch overlap but not in regular hours is in overtime
+      lunchInOvertime = totalLunchOverlap - lunchInRegular;
+    }
+  }
+
+  const finalRegularMinutes = Math.max(0, rawRegularMinutes - lunchInRegular);
+  const finalOvertimeMinutes = Math.max(0, rawOvertimeMinutes - lunchInOvertime);
 
   return {
-    regularHours: regularMinutes / 60,
-    overtimeHours: overtimeMinutes / 60
+    regularHours: finalRegularMinutes / 60,
+    overtimeHours: finalOvertimeMinutes / 60
   };
 }

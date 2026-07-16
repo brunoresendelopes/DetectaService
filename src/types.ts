@@ -15,6 +15,9 @@ export interface ExecutionEntry {
   operator: string;
   concluded: boolean;
   section: string;
+  discountLunch?: boolean;
+  lunchStart?: string; // HH:MM
+  lunchEnd?: string; // HH:MM
 }
 
 export interface ServiceOrder {

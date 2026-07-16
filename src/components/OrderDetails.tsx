@@ -39,9 +39,12 @@ export default function OrderDetails({
   
   // Hours logging form states
   const [selectedOperator, setSelectedOperator] = useState('');
-  const [selectedSection, setSelectedSection] = useState(INITIAL_SECTIONS[0].name);
+  const [selectedSection, setSelectedSection] = useState('');
   const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('07:00');
+  const [discountLunch, setDiscountLunch] = useState(true);
+  const [lunchStart, setLunchStart] = useState('12:00');
+  const [lunchEnd, setLunchEnd] = useState('13:00');
 
   // Sync selectedOperator with operators prop when loaded
   React.useEffect(() => {
@@ -146,11 +149,40 @@ export default function OrderDetails({
     
     let totalMin = (endH * 60 + endM) - (startH * 60 + startM);
     // Handle overnight log if any
+    let endMinAdjusted = endH * 60 + endM;
     if (totalMin < 0) {
       totalMin += 24 * 60;
+      endMinAdjusted += 24 * 60;
     }
     
-    const decimalHours = totalMin / 60;
+    let discountMinutes = 0;
+    if (discountLunch) {
+      const [lStartH, lStartM] = lunchStart.split(':').map(Number);
+      const [lEndH, lEndM] = lunchEnd.split(':').map(Number);
+      const lStart = lStartH * 60 + lStartM;
+      const lEnd = lEndH * 60 + lEndM;
+
+      if (lStart < lEnd) {
+        const startMin = startH * 60 + startM;
+        
+        // Overlap on day 1 lunch: [lStart, lEnd]
+        const overlapStart1 = Math.max(startMin, lStart);
+        const overlapEnd1 = Math.min(endMinAdjusted, lEnd);
+        if (overlapStart1 < overlapEnd1) {
+          discountMinutes += (overlapEnd1 - overlapStart1);
+        }
+
+        // Overlap on day 2 lunch (for overnight shifts): [lStart + 1440, lEnd + 1440]
+        const overlapStart2 = Math.max(startMin, lStart + 1440);
+        const overlapEnd2 = Math.min(endMinAdjusted, lEnd + 1440);
+        if (overlapStart2 < overlapEnd2) {
+          discountMinutes += (overlapEnd2 - overlapStart2);
+        }
+      }
+    }
+
+    const finalWorkedMinutes = Math.max(0, totalMin - discountMinutes);
+    const decimalHours = finalWorkedMinutes / 60;
 
     const newLog: ExecutionEntry = {
       id: `exec-${Date.now()}`,
@@ -160,7 +192,10 @@ export default function OrderDetails({
       totalHours: Number(decimalHours.toFixed(2)),
       operator: selectedOperator,
       concluded,
-      section: selectedSection
+      section: selectedSection,
+      discountLunch,
+      lunchStart: discountLunch ? lunchStart : undefined,
+      lunchEnd: discountLunch ? lunchEnd : undefined
     };
 
     // Auto update Order status to 'IN_PROGRESS' if it was 'OPEN'
@@ -663,21 +698,6 @@ export default function OrderDetails({
                   </select>
                 </div>
 
-                {/* Section Select */}
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Seção / Oficina</label>
-                  <select
-                    value={selectedSection}
-                    onChange={(e) => setSelectedSection(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    required
-                  >
-                    {INITIAL_SECTIONS.map(sec => (
-                      <option key={sec.id} value={sec.name}>{sec.name}</option>
-                    ))}
-                  </select>
-                </div>
-
                 {/* Date */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Data</label>
@@ -713,6 +733,47 @@ export default function OrderDetails({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Lunch break settings */}
+              <div className="bg-white border border-slate-200/60 rounded-xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="discountLunch"
+                    checked={discountLunch}
+                    onChange={(e) => setDiscountLunch(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="discountLunch" className="text-xs text-slate-700 font-bold cursor-pointer">
+                    Descontar horário de almoço do total de horas? (Padrão: 12:00 - 13:00)
+                  </label>
+                </div>
+
+                {discountLunch && (
+                  <div className="grid grid-cols-2 gap-3 pl-6 border-l-2 border-blue-100 animate-fadeIn">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Início Almoço</label>
+                      <input
+                        type="time"
+                        value={lunchStart}
+                        onChange={(e) => setLunchStart(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        required={discountLunch}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fim Almoço</label>
+                      <input
+                        type="time"
+                        value={lunchEnd}
+                        onChange={(e) => setLunchEnd(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        required={discountLunch}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Concluded toggler */}
@@ -768,7 +829,7 @@ export default function OrderDetails({
                     <th className="py-3 px-4">Data</th>
                     <th className="py-3 px-3">Período</th>
                     <th className="py-3 px-3 text-right text-slate-500">Horas</th>
-                    <th className="py-3 px-3">Seção / Operador</th>
+                    <th className="py-3 px-3">Operador</th>
                     <th className="py-3 px-3 text-center">Fim</th>
                     <th className="py-3 px-4 text-right">Ação</th>
                   </tr>
@@ -787,16 +848,23 @@ export default function OrderDetails({
                           <td className="py-3 px-4 font-bold font-mono">
                             {exec.date.split('-').reverse().join('/')}
                           </td>
-                          <td className="py-3 px-3 font-semibold font-mono text-slate-500">
-                            {exec.startTime} - {exec.endTime}
+                          <td className="py-3 px-3 font-semibold font-mono text-slate-500 space-y-1">
+                            <div>{exec.startTime} - {exec.endTime}</div>
+                            {exec.discountLunch !== false && (
+                              <div className="text-[10px] text-slate-400 font-bold bg-slate-100 rounded px-1.5 py-0.5 w-fit font-sans">
+                                Almoço: {exec.lunchStart || '12:00'} - {exec.lunchEnd || '13:00'}
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-3 text-right font-extrabold font-mono text-slate-900 text-xs">
                             {displayHrs}
                           </td>
                           <td className="py-3 px-3 space-y-0.5">
-                            <div className="font-extrabold text-[9px] uppercase text-slate-400 tracking-wider">
-                              {exec.section}
-                            </div>
+                            {exec.section && exec.section.trim() !== '' && (
+                              <div className="font-extrabold text-[9px] uppercase text-slate-400 tracking-wider">
+                                {exec.section}
+                              </div>
+                            )}
                             <div className="font-bold text-slate-800">
                               {exec.operator}
                             </div>

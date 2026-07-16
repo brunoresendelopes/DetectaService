@@ -6,7 +6,8 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc, 
-  writeBatch 
+  writeBatch,
+  onSnapshot 
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { ServiceOrder, Operator } from './types';
@@ -18,41 +19,46 @@ const OPERATORS_COLLECTION = 'operators';
 const CONFIG_COLLECTION = 'config';
 
 /**
- * Seeds initial data to Firestore if collections are empty.
+ * Seeds initial data to Firestore if the system has not been initialized yet.
  */
 export async function seedInitialDataIfNeeded() {
   try {
-    // Check if we already have orders
-    const ordersSnapshot = await getDocs(collection(db, ORDERS_COLLECTION));
-    if (ordersSnapshot.empty) {
-      console.log('Seeding initial service orders...');
-      const batch = writeBatch(db);
-      for (const order of INITIAL_SERVICE_ORDERS) {
-        const orderRef = doc(db, ORDERS_COLLECTION, order.id);
-        batch.set(orderRef, order);
-      }
-      await batch.commit();
-    }
-
-    // Check if we already have operators
-    const operatorsSnapshot = await getDocs(collection(db, OPERATORS_COLLECTION));
-    if (operatorsSnapshot.empty) {
-      console.log('Seeding initial operators...');
-      const batch = writeBatch(db);
-      for (const op of INITIAL_OPERATORS) {
-        const opRef = doc(db, OPERATORS_COLLECTION, op.id);
-        batch.set(opRef, op);
-      }
-      await batch.commit();
-    }
-
-    // Check if we have system password config
     const passwordDocRef = doc(db, CONFIG_COLLECTION, 'system');
     const passwordDoc = await getDoc(passwordDocRef);
-    if (!passwordDoc.exists()) {
-      console.log('Seeding default system password...');
-      await setDoc(passwordDocRef, { password: 'detecta2026' });
+    
+    // If system config document exists, we are already initialized. Skip seeding.
+    if (passwordDoc.exists()) {
+      console.log('System already initialized, skipping seeding.');
+      return;
     }
+
+    console.log('Initializing fresh database, seeding default data...');
+
+    // Seed initial operators
+    console.log('Seeding initial operators...');
+    const opBatch = writeBatch(db);
+    for (const op of INITIAL_OPERATORS) {
+      const opRef = doc(db, OPERATORS_COLLECTION, op.id);
+      opBatch.set(opRef, op);
+    }
+    await opBatch.commit();
+
+    // Seed initial service orders
+    console.log('Seeding initial service orders...');
+    const orderBatch = writeBatch(db);
+    for (const order of INITIAL_SERVICE_ORDERS) {
+      const orderRef = doc(db, ORDERS_COLLECTION, order.id);
+      orderBatch.set(orderRef, order);
+    }
+    await orderBatch.commit();
+
+    // Mark system as initialized and set default password
+    console.log('Seeding system configuration and password...');
+    await setDoc(passwordDocRef, { 
+      password: 'detecta2026',
+      initialized: true,
+      initializedAt: new Date().toISOString()
+    });
   } catch (error) {
     console.error('Error seeding initial data:', error);
   }
@@ -193,4 +199,53 @@ export async function updateSystemPassword(newPassword: string): Promise<void> {
     console.error('Error updating system password:', error);
     throw error;
   }
+}
+
+/**
+ * Subscribe to real-time service orders updates across devices.
+ */
+export function subscribeServiceOrders(onUpdate: (orders: ServiceOrder[]) => void) {
+  const q = collection(db, ORDERS_COLLECTION);
+  return onSnapshot(q, (snapshot) => {
+    const orders: ServiceOrder[] = [];
+    snapshot.forEach((doc) => {
+      orders.push(doc.data() as ServiceOrder);
+    });
+    // Sort by code descending by default
+    onUpdate(orders.sort((a, b) => b.code.localeCompare(a.code)));
+  }, (error) => {
+    console.error('Error listening to service orders updates:', error);
+  });
+}
+
+/**
+ * Subscribe to real-time operators updates across devices.
+ */
+export function subscribeOperators(onUpdate: (operators: Operator[]) => void) {
+  const q = collection(db, OPERATORS_COLLECTION);
+  return onSnapshot(q, (snapshot) => {
+    const operators: Operator[] = [];
+    snapshot.forEach((doc) => {
+      operators.push(doc.data() as Operator);
+    });
+    onUpdate(operators);
+  }, (error) => {
+    console.error('Error listening to operators updates:', error);
+  });
+}
+
+/**
+ * Subscribe to real-time system password updates across devices.
+ */
+export function subscribeSystemPassword(onUpdate: (password: string) => void) {
+  const docRef = doc(db, CONFIG_COLLECTION, 'system');
+  return onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      onUpdate(docSnap.data().password || 'detecta2026');
+    } else {
+      onUpdate('detecta2026');
+    }
+  }, (error) => {
+    console.error('Error listening to system password updates:', error);
+  });
 }

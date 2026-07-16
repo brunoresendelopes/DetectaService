@@ -61,7 +61,9 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
   const sectionHours: { [key: string]: number } = {};
   orders.forEach(order => {
     order.executions.forEach(exec => {
-      sectionHours[exec.section] = (sectionHours[exec.section] || 0) + exec.totalHours;
+      if (exec.section && exec.section.trim() !== '') {
+        sectionHours[exec.section] = (sectionHours[exec.section] || 0) + exec.totalHours;
+      }
     });
   });
 

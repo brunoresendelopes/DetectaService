@@ -245,7 +245,14 @@ export default function PrintReport({ order, onBack }: PrintReportProps) {
                     return (
                       <tr key={exec.id}>
                         <td className="py-2.5 px-4 font-mono font-bold">{exec.date.split('-').reverse().join('/')}</td>
-                        <td className="py-2.5 px-3 font-mono">{exec.startTime} às {exec.endTime}</td>
+                        <td className="py-2.5 px-3 font-mono">
+                          <div>{exec.startTime} às {exec.endTime}</div>
+                          {exec.discountLunch !== false && (
+                            <div className="text-[8px] text-slate-400 font-bold">
+                              Almoço: {exec.lunchStart || '12:00'} - {exec.lunchEnd || '13:00'}
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3 text-right font-extrabold font-mono text-slate-900">{displayHrs}</td>
                         <td className="py-2.5 px-4 font-extrabold uppercase text-slate-500 text-[10px] tracking-wide">{exec.section}</td>
                         <td className="py-2.5 px-4 font-bold">{exec.operator}</td>
