@@ -27,10 +27,58 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
   const reworkOrders = orders.filter(o => o.status === 'REWORK').length;
   const activeOrdersCount = openOrders + inProgressOrders + reworkOrders;
 
-  // Calculate total hours
-  const totalHours = orders.reduce((sum, order) => {
-    const orderHours = order.executions.reduce((acc, curr) => acc + curr.totalHours, 0);
-    return sum + orderHours;
+  // Helper to parse HH:MM to minutes from midnight
+  const parseToMinutes = (timeStr: string): number => {
+    const [h, m] = timeStr.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return 0;
+    return h * 60 + m;
+  };
+
+  const getExecutionMinutes = (exec: ExecutionEntry): number => {
+    const startMinutes = parseToMinutes(exec.startTime);
+    let endMinutes = parseToMinutes(exec.endTime);
+
+    let totalMinutes = endMinutes - startMinutes;
+    if (totalMinutes <= 0) {
+      totalMinutes += 24 * 60; // overnight
+      endMinutes += 24 * 60;
+    }
+
+    let discountMinutes = 0;
+    if (exec.discountLunch !== false) {
+      const lunchStart = exec.lunchStart || '12:00';
+      const lunchEnd = exec.lunchEnd || '13:00';
+      const lStart = parseToMinutes(lunchStart);
+      const lEnd = parseToMinutes(lunchEnd);
+
+      if (lStart < lEnd) {
+        // Find overlap of worked period with lunch on Day 1
+        const lunchOverlapStart1 = Math.max(startMinutes, lStart);
+        const lunchOverlapEnd1 = Math.min(endMinutes, lEnd);
+        let day1LunchOverlap = 0;
+        if (lunchOverlapStart1 < lunchOverlapEnd1) {
+          day1LunchOverlap = lunchOverlapEnd1 - lunchOverlapStart1;
+        }
+
+        // Find overlap of worked period with lunch on Day 2 (for overnight shifts)
+        const lunchOverlapStart2 = Math.max(startMinutes, lStart + 1440);
+        const lunchOverlapEnd2 = Math.min(endMinutes, lEnd + 1440);
+        let day2LunchOverlap = 0;
+        if (lunchOverlapStart2 < lunchOverlapEnd2) {
+          day2LunchOverlap = lunchOverlapEnd2 - lunchOverlapStart2;
+        }
+
+        discountMinutes = day1LunchOverlap + day2LunchOverlap;
+      }
+    }
+
+    return Math.max(0, totalMinutes - discountMinutes);
+  };
+
+  // Calculate total minutes
+  const totalMinutes = orders.reduce((sum, order) => {
+    const orderMinutes = order.executions.reduce((acc, curr) => acc + getExecutionMinutes(curr), 0);
+    return sum + orderMinutes;
   }, 0);
 
   // Get all recent executions across all orders
@@ -57,25 +105,25 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
     })
     .slice(0, 5);
 
-  // Section/Department workload (total hours by section)
-  const sectionHours: { [key: string]: number } = {};
+  // Section/Department workload (total minutes by section)
+  const sectionMinutes: { [key: string]: number } = {};
   orders.forEach(order => {
     order.executions.forEach(exec => {
       if (exec.section && exec.section.trim() !== '') {
-        sectionHours[exec.section] = (sectionHours[exec.section] || 0) + exec.totalHours;
+        sectionMinutes[exec.section] = (sectionMinutes[exec.section] || 0) + getExecutionMinutes(exec);
       }
     });
   });
 
-  const sectionData = Object.keys(sectionHours).map(section => ({
+  const sectionData = Object.keys(sectionMinutes).map(section => ({
     name: section,
-    hours: sectionHours[section]
-  })).sort((a, b) => b.hours - a.hours);
+    minutes: sectionMinutes[section]
+  })).sort((a, b) => b.minutes - a.minutes);
 
-  // Format hours as HH:MM
-  const formatHours = (hoursDecimal: number) => {
-    const h = Math.floor(hoursDecimal);
-    const m = Math.round((hoursDecimal - h) * 60);
+  // Format minutes as HH:MM
+  const formatMinutes = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}h`;
   };
 
@@ -146,10 +194,10 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div className="space-y-1.5">
             <span className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">Horas Apontadas</span>
-            <div className="text-3xl font-extrabold text-slate-900 font-mono">{formatHours(totalHours)}</div>
+            <div className="text-3xl font-extrabold text-slate-900 font-mono">{formatMinutes(totalMinutes)}</div>
             <div className="text-[11px] text-slate-500 flex items-center gap-1 font-semibold">
               <Clock className="h-3 w-3 inline" />
-              Média: {totalOrders > 0 ? formatHours(totalHours / totalOrders) : '00:00h'} por O.S.
+              Média: {totalOrders > 0 ? formatMinutes(Math.round(totalMinutes / totalOrders)) : '00:00h'} por O.S.
             </div>
           </div>
           <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-600 shadow-sm">
@@ -201,8 +249,8 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
           ) : (
             <div className="space-y-5 py-2">
               {sectionData.map((sec, idx) => {
-                const maxHours = Math.max(...sectionData.map(s => s.hours));
-                const percentage = maxHours > 0 ? (sec.hours / maxHours) * 100 : 0;
+                const maxMinutes = Math.max(...sectionData.map(s => s.minutes));
+                const percentage = maxMinutes > 0 ? (sec.minutes / maxMinutes) * 100 : 0;
                 
                 // Assign matching progress bar styles - Sleek bright colors
                 let barColor = 'bg-blue-600';
@@ -219,7 +267,7 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
                         <span className="font-bold text-slate-800 text-xs md:text-sm">{sec.name}</span>
                       </div>
                       <span className="font-mono text-xs font-bold text-slate-700">
-                        {formatHours(sec.hours)}
+                        {formatMinutes(sec.minutes)}
                       </span>
                     </div>
                     <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden">
@@ -274,7 +322,7 @@ export default function Dashboard({ orders, onNavigateToTab, onSelectOrder }: Da
                             <div className="flex-1 min-w-0 pt-1.5">
                               <p className="text-xs text-slate-500">
                                 <span className="font-extrabold text-slate-800">{item.exec.operator}</span> apontou{' '}
-                                <span className="font-bold text-slate-900 font-mono">{formatHours(item.exec.totalHours)}</span> em{' '}
+                                <span className="font-bold text-slate-900 font-mono">{formatMinutes(getExecutionMinutes(item.exec))}</span> em{' '}
                                 <span className="font-bold text-blue-600">{item.exec.section}</span>
                               </p>
                               <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-400">

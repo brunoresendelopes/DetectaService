@@ -9,18 +9,18 @@ export const INITIAL_SECTIONS: Section[] = [
 ];
 
 export const INITIAL_OPERATORS: Operator[] = [
-  { id: '1', name: 'ALTAIR APARECIDO', role: 'Auxiliar de Produção', active: true },
-  { id: '2', name: 'DALVAN ROBSON', role: 'Auxiliar de Produção', active: true },
-  { id: '3', name: 'DIONE PEREIRA', role: 'Soldador', active: true },
-  { id: '4', name: 'EVANDRO CARLOS', role: 'Soldador', active: true },
-  { id: '5', name: 'FAGNER FELIPE', role: 'Auxiliar de Produção', active: true },
-  { id: '6', name: 'GILBERTO GOMES', role: 'Oxicortador Máquina', active: true },
-  { id: '7', name: 'GILSON ANDERSON', role: 'Torneiro Mecânico', active: true },
-  { id: '8', name: 'LEANDRO JOSÉ', role: 'Torneiro Mecânico', active: true },
-  { id: '9', name: 'MÁRCIO AMARAL', role: 'Pintor Industrial', active: true },
-  { id: '10', name: 'NATANAEL RODRIGUES', role: 'Auxiliar de Produção', active: true },
-  { id: '11', name: 'RAMON DO NASCIMENTO', role: 'Auxiliar de Produção', active: true },
-  { id: '12', name: 'RONALDO JOSÉ', role: 'Líder de Ajustagem/Mont.', active: true }
+  { id: '1', name: 'ALTAIR APARECIDO', role: 'Auxiliar de Produção', active: true, birthday: '1985-11-18' },
+  { id: '2', name: 'DALVAN ROBSON', role: 'Auxiliar de Produção', active: true, birthday: '1988-05-24' },
+  { id: '3', name: 'DIONE PEREIRA', role: 'Soldador', active: true, birthday: '1988-11-19' },
+  { id: '4', name: 'EVANDRO CARLOS', role: 'Soldador', active: true, birthday: '1979-02-08' },
+  { id: '5', name: 'FAGNER FELIPE', role: 'Auxiliar de Produção', active: true, birthday: '1984-08-02' },
+  { id: '6', name: 'GILBERTO GOMES', role: 'Oxicortador Máquina', active: true, birthday: '1989-09-27' },
+  { id: '7', name: 'GILSON ANDERSON', role: 'Torneiro Mecânico', active: true, birthday: '1984-03-21' },
+  { id: '8', name: 'LEANDRO JOSÉ', role: 'Torneiro Mecânico', active: true, birthday: '1984-03-20' },
+  { id: '9', name: 'MÁRCIO AMARAL', role: 'Pintor Industrial', active: true, birthday: '1959-09-10' },
+  { id: '10', name: 'NATANAEL RODRIGUES', role: 'Auxiliar de Produção', active: true, birthday: '2005-10-03' },
+  { id: '11', name: 'RAMON DO NASCIMENTO', role: 'Auxiliar de Produção', active: true, birthday: '1996-03-12' },
+  { id: '12', name: 'RONALDO JOSÉ', role: 'Líder de Ajustagem/Mont.', active: true, birthday: '1972-12-18' }
 ];
 
 export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [

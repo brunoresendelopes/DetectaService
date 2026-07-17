@@ -33,6 +33,10 @@ export interface ServiceOrder {
   completedTime?: string; // HH:MM
   inspector?: string;
   nfSerie?: string;
+  nfEntrada?: string;
+  nfRetorno?: string;
+  nfServico?: string;
+  nfVenda?: string;
   details: string;
   rework: boolean;
   status: OrderStatus;
@@ -47,6 +51,8 @@ export interface Operator {
   name: string;
   role: string;
   active: boolean;
+  admissionDate?: string; // YYYY-MM-DD
+  birthday?: string;      // YYYY-MM-DD
 }
 
 export interface Section {

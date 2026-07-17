@@ -176,6 +176,30 @@ export default function PrintReport({ order, onBack }: PrintReportProps) {
               <span className="block text-[9px] text-slate-400 font-bold uppercase">Total Horas Trabalhadas</span>
               <span className="font-mono font-bold text-blue-800">{calculateHours()}</span>
             </div>
+            {order.nfEntrada && (
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-150">
+                <span className="block text-[9px] text-slate-400 font-bold uppercase">NF Entrada</span>
+                <span className="font-mono font-bold text-slate-950">{order.nfEntrada}</span>
+              </div>
+            )}
+            {order.nfRetorno && (
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-150">
+                <span className="block text-[9px] text-slate-400 font-bold uppercase">NF Retorno</span>
+                <span className="font-mono font-bold text-slate-950">{order.nfRetorno}</span>
+              </div>
+            )}
+            {order.nfServico && (
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-150">
+                <span className="block text-[9px] text-slate-400 font-bold uppercase">NF Serviço</span>
+                <span className="font-mono font-bold text-slate-950">{order.nfServico}</span>
+              </div>
+            )}
+            {order.nfVenda && (
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-150">
+                <span className="block text-[9px] text-slate-400 font-bold uppercase">NF Venda</span>
+                <span className="font-mono font-bold text-slate-950">{order.nfVenda}</span>
+              </div>
+            )}
           </div>
         </div>
 

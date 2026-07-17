@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ServiceOrder, ExecutionEntry, SubService, Operator, Section } from '../types';
-import { INITIAL_SECTIONS, INITIAL_OPERATORS } from '../mockData';
+import { INITIAL_OPERATORS } from '../mockData';
 import { 
   ArrowLeft, 
   Clock, 
@@ -27,6 +27,8 @@ interface OrderDetailsProps {
   operators: Operator[];
   onDeleteOrder: (orderId: string) => void;
   onEditOrder: (order: ServiceOrder) => void;
+  sections: Section[];
+  onUpdateSections: (updated: Section[]) => void;
 }
 
 export default function OrderDetails({ 
@@ -36,10 +38,17 @@ export default function OrderDetails({
   onPrintOrder,
   operators,
   onDeleteOrder,
-  onEditOrder
+  onEditOrder,
+  sections = [],
+  onUpdateSections
 }: OrderDetailsProps) {
   const [showLogForm, setShowLogForm] = useState(false);
   const [editingExecId, setEditingExecId] = useState<string | null>(null);
+  
+  // Section management states
+  const [showSectionManager, setShowSectionManager] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [sectionError, setSectionError] = useState<string | null>(null);
   
   // Hours logging form states
   const [selectedOperator, setSelectedOperator] = useState('');
@@ -175,6 +184,44 @@ export default function OrderDetails({
     });
   };
 
+  const handleAddSection = () => {
+    const trimmed = newSectionName.trim().toUpperCase();
+    setSectionError(null);
+    if (!trimmed) return;
+    
+    // Check for duplicates
+    if (sections.some(s => s.name.toUpperCase() === trimmed)) {
+      setSectionError('Esta seção já existe!');
+      return;
+    }
+    
+    const colors = [
+      'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800',
+      'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800',
+      'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800',
+      'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800',
+      'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-800',
+      'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800',
+      'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800',
+    ];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    const newSec: Section = {
+      id: `sec-${Date.now()}`,
+      name: trimmed,
+      color: randomColor
+    };
+    
+    const updated = [...sections, newSec];
+    onUpdateSections(updated);
+    setNewSectionName('');
+  };
+
+  const handleRemoveSection = (id: string) => {
+    const updated = sections.filter(s => s.id !== id);
+    onUpdateSections(updated);
+  };
+
   // Log new execution entry
   const handleAddLog = (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,7 +276,7 @@ export default function OrderDetails({
             date: logDate,
             startTime,
             endTime,
-            totalHours: Number(decimalHours.toFixed(2)),
+            totalHours: decimalHours,
             operator: selectedOperator,
             concluded,
             section: selectedSection,
@@ -246,7 +293,7 @@ export default function OrderDetails({
         date: logDate,
         startTime,
         endTime,
-        totalHours: Number(decimalHours.toFixed(2)),
+        totalHours: decimalHours,
         operator: selectedOperator,
         concluded,
         section: selectedSection,
@@ -677,6 +724,39 @@ export default function OrderDetails({
           </div>
         </div>
 
+        {/* Documentos Fiscais (Only show if at least one is present) */}
+        {(order.nfEntrada || order.nfRetorno || order.nfServico || order.nfVenda) && (
+          <div className="border-t border-slate-100 pt-5 space-y-2">
+            <span className="block text-[11px] text-slate-400 uppercase tracking-wider font-extrabold">Documentos Fiscais Relacionados</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+              {order.nfEntrada && (
+                <div>
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold mb-0.5">NF Entrada</span>
+                  <span className="font-mono font-bold text-slate-800 text-sm">{order.nfEntrada}</span>
+                </div>
+              )}
+              {order.nfRetorno && (
+                <div>
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold mb-0.5">NF Retorno</span>
+                  <span className="font-mono font-bold text-slate-800 text-sm">{order.nfRetorno}</span>
+                </div>
+              )}
+              {order.nfServico && (
+                <div>
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold mb-0.5">NF Serviço</span>
+                  <span className="font-mono font-bold text-slate-800 text-sm">{order.nfServico}</span>
+                </div>
+              )}
+              {order.nfVenda && (
+                <div>
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold mb-0.5">NF Venda</span>
+                  <span className="font-mono font-bold text-slate-800 text-sm">{order.nfVenda}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Detailed description */}
         <div className="border-t border-slate-100 pt-5 space-y-2">
           <span className="block text-[11px] text-slate-400 uppercase tracking-wider font-extrabold">Descrição de Detalhes Técnicos</span>
@@ -777,7 +857,19 @@ export default function OrderDetails({
 
                 {/* Section select */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Seção / Setor</label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase">Seção / Setor</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSectionManager(!showSectionManager);
+                        setSectionError(null);
+                      }}
+                      className="text-[9px] text-blue-600 hover:text-blue-700 font-bold cursor-pointer flex items-center gap-0.5 hover:underline"
+                    >
+                      {showSectionManager ? 'Fechar' : '＋ Gerenciar'}
+                    </button>
+                  </div>
                   <select
                     value={selectedSection}
                     onChange={(e) => setSelectedSection(e.target.value)}
@@ -785,7 +877,7 @@ export default function OrderDetails({
                     required
                   >
                     <option value="">Selecione a Seção...</option>
-                    {INITIAL_SECTIONS.map(sec => (
+                    {sections.map(sec => (
                       <option key={sec.id} value={sec.name}>
                         {sec.name}
                       </option>
@@ -805,6 +897,60 @@ export default function OrderDetails({
                   />
                 </div>
               </div>
+
+              {showSectionManager && (
+                <div className="bg-slate-100 border border-slate-200 rounded-2xl p-4.5 space-y-4 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="text-[11px] font-extrabold text-slate-700 uppercase">Gerenciar Seções / Setores</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Novos setores cadastrados ficam ativos em campo</span>
+                  </div>
+                  
+                  {sectionError && (
+                    <div className="bg-rose-50 border border-rose-100 p-2.5 rounded-xl text-[11px] font-semibold text-rose-700 flex items-center gap-1.5 animate-fadeIn">
+                      <AlertTriangle className="h-4 w-4 text-rose-500" />
+                      <span>{sectionError}</span>
+                    </div>
+                  )}
+
+                  {/* Add new section form */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do Setor (Ex: ENGENHARIA)"
+                      value={newSectionName}
+                      onChange={(e) => setNewSectionName(e.target.value.toUpperCase())}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-400 uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSection}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+
+                  {/* List current sections with delete button */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
+                    {sections.map(sec => (
+                      <div key={sec.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                        <span className="truncate">{sec.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSection(sec.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="Remover Seção"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-normal font-medium">
+                    * A exclusão de uma seção remove-a apenas da lista de seleção de novos apontamentos. Os registros históricos salvos que já usam esta seção continuam intactos e preservados.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Start & End Hour */}

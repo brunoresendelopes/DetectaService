@@ -1,6 +1,8 @@
 export interface OvertimeResult {
   regularHours: number; // Decimal hours
   overtimeHours: number; // Decimal hours
+  regularMinutes: number;
+  overtimeMinutes: number;
 }
 
 export function calculateOvertime(
@@ -14,7 +16,7 @@ export function calculateOvertime(
   // Parse date safely
   const parts = dateStr.split('-');
   if (parts.length !== 3) {
-    return { regularHours: 0, overtimeHours: 0 };
+    return { regularHours: 0, overtimeHours: 0, regularMinutes: 0, overtimeMinutes: 0 };
   }
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
@@ -118,6 +120,8 @@ export function calculateOvertime(
 
   return {
     regularHours: finalRegularMinutes / 60,
-    overtimeHours: finalOvertimeMinutes / 60
+    overtimeHours: finalOvertimeMinutes / 60,
+    regularMinutes: finalRegularMinutes,
+    overtimeMinutes: finalOvertimeMinutes
   };
 }

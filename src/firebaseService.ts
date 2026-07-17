@@ -10,8 +10,8 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { ServiceOrder, Operator } from './types';
-import { INITIAL_SERVICE_ORDERS, INITIAL_OPERATORS } from './mockData';
+import { ServiceOrder, Operator, Section } from './types';
+import { INITIAL_SERVICE_ORDERS, INITIAL_OPERATORS, INITIAL_SECTIONS } from './mockData';
 
 // Collection references
 const ORDERS_COLLECTION = 'orders';
@@ -82,9 +82,44 @@ export async function seedInitialDataIfNeeded() {
       initialized: true,
       initializedAt: new Date().toISOString()
     }));
+
+    // Seed initial sections
+    console.log('Seeding initial sections...');
+    const sectionsDocRef = doc(db, CONFIG_COLLECTION, 'sections');
+    await setDoc(sectionsDocRef, cleanUndefined({ list: INITIAL_SECTIONS }));
   } catch (error) {
     console.error('Error seeding initial data:', error);
   }
+}
+
+/**
+ * Saves sections list to Firestore.
+ */
+export async function saveSectionsToDb(sections: Section[]): Promise<void> {
+  try {
+    const docRef = doc(db, CONFIG_COLLECTION, 'sections');
+    await setDoc(docRef, cleanUndefined({ list: sections }));
+  } catch (error) {
+    console.error('Error saving sections to Firestore:', error);
+    throw error;
+  }
+}
+
+/**
+ * Subscribe to real-time sections updates across devices.
+ */
+export function subscribeSections(onUpdate: (sections: Section[]) => void, onError?: (error: any) => void) {
+  const docRef = doc(db, CONFIG_COLLECTION, 'sections');
+  return onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists() && docSnap.data().list) {
+      onUpdate(docSnap.data().list as Section[]);
+    } else {
+      onUpdate(INITIAL_SECTIONS);
+    }
+  }, (error) => {
+    console.error('Error listening to sections updates:', error);
+    if (onError) onError(error);
+  });
 }
 
 /**

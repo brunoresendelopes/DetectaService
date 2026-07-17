@@ -114,6 +114,9 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
       orderRework: boolean;
       regularHours: number;
       overtimeHours: number;
+      regularMinutes: number;
+      overtimeMinutes: number;
+      totalMinutes: number;
       drawingNumber?: string;
     }> = [];
 
@@ -166,6 +169,9 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           orderRework: order.rework,
           regularHours: overtimeInfo.regularHours,
           overtimeHours: overtimeInfo.overtimeHours,
+          regularMinutes: overtimeInfo.regularMinutes,
+          overtimeMinutes: overtimeInfo.overtimeMinutes,
+          totalMinutes: overtimeInfo.regularMinutes + overtimeInfo.overtimeMinutes,
           drawingNumber: order.drawingNumber
         });
       });
@@ -174,46 +180,46 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
     // Step 2: Sort executions by date desc (most recent first)
     matchedExecutions.sort((a, b) => b.exec.date.localeCompare(a.exec.date));
 
-    // Step 3: Summarize metrics
-    const totalHours = matchedExecutions.reduce((sum, item) => sum + item.exec.totalHours, 0);
-    const totalRegularHours = matchedExecutions.reduce((sum, item) => sum + item.regularHours, 0);
-    const totalOvertimeHours = matchedExecutions.reduce((sum, item) => sum + item.overtimeHours, 0);
+    // Step 3: Summarize metrics in minutes
+    const totalMinutes = matchedExecutions.reduce((sum, item) => sum + item.totalMinutes, 0);
+    const totalRegularMinutes = matchedExecutions.reduce((sum, item) => sum + item.regularMinutes, 0);
+    const totalOvertimeMinutes = matchedExecutions.reduce((sum, item) => sum + item.overtimeMinutes, 0);
     const uniqueOrders = new Set(matchedExecutions.map(item => item.orderId));
     const uniqueOperators = new Set(matchedExecutions.map(item => item.exec.operator));
     
     // Group by operator
-    const operatorSummary: { [key: string]: { hours: number; regularHours: number; overtimeHours: number; count: number; sections: Set<string> } } = {};
+    const operatorSummary: { [key: string]: { minutes: number; regularMinutes: number; overtimeMinutes: number; count: number; sections: Set<string> } } = {};
     matchedExecutions.forEach(item => {
       const op = item.exec.operator.toUpperCase();
       if (!operatorSummary[op]) {
-        operatorSummary[op] = { hours: 0, regularHours: 0, overtimeHours: 0, count: 0, sections: new Set() };
+        operatorSummary[op] = { minutes: 0, regularMinutes: 0, overtimeMinutes: 0, count: 0, sections: new Set() };
       }
-      operatorSummary[op].hours += item.exec.totalHours;
-      operatorSummary[op].regularHours += item.regularHours;
-      operatorSummary[op].overtimeHours += item.overtimeHours;
+      operatorSummary[op].minutes += item.totalMinutes;
+      operatorSummary[op].regularMinutes += item.regularMinutes;
+      operatorSummary[op].overtimeMinutes += item.overtimeMinutes;
       operatorSummary[op].count += 1;
       operatorSummary[op].sections.add(item.exec.section);
     });
 
     // Group by activity section / description
-    const sectionSummary: { [key: string]: { hours: number; regularHours: number; overtimeHours: number; operators: Set<string>; count: number } } = {};
+    const sectionSummary: { [key: string]: { minutes: number; regularMinutes: number; overtimeMinutes: number; operators: Set<string>; count: number } } = {};
     matchedExecutions.forEach(item => {
       const sec = item.exec.section.toUpperCase();
       if (!sectionSummary[sec]) {
-        sectionSummary[sec] = { hours: 0, regularHours: 0, overtimeHours: 0, operators: new Set(), count: 0 };
+        sectionSummary[sec] = { minutes: 0, regularMinutes: 0, overtimeMinutes: 0, operators: new Set(), count: 0 };
       }
-      sectionSummary[sec].hours += item.exec.totalHours;
-      sectionSummary[sec].regularHours += item.regularHours;
-      sectionSummary[sec].overtimeHours += item.overtimeHours;
+      sectionSummary[sec].minutes += item.totalMinutes;
+      sectionSummary[sec].regularMinutes += item.regularMinutes;
+      sectionSummary[sec].overtimeMinutes += item.overtimeMinutes;
       sectionSummary[sec].operators.add(item.exec.operator);
       sectionSummary[sec].count += 1;
     });
 
     return {
       executions: matchedExecutions,
-      totalHours,
-      totalRegularHours,
-      totalOvertimeHours,
+      totalMinutes,
+      totalRegularMinutes,
+      totalOvertimeMinutes,
       affectedOrdersCount: uniqueOrders.size,
       affectedOperatorsCount: uniqueOperators.size,
       operatorSummary,
@@ -225,6 +231,13 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
   const formatHours = (hoursDecimal: number) => {
     const h = Math.floor(hoursDecimal);
     const m = Math.round((hoursDecimal - h) * 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}h`;
+  };
+
+  // Format integer minutes as HH:MM
+  const formatMinutes = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}h`;
   };
 
@@ -433,7 +446,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Total Horas</span>
             <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight">
-              {formatHours(filteredData.totalHours)}
+              {formatMinutes(filteredData.totalMinutes)}
             </span>
           </div>
         </div>
@@ -446,7 +459,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Horas Normais</span>
             <span className="text-xl md:text-2xl font-black text-slate-900 font-mono tracking-tight text-slate-700">
-              {formatHours(filteredData.totalRegularHours)}
+              {formatMinutes(filteredData.totalRegularMinutes)}
             </span>
           </div>
         </div>
@@ -459,7 +472,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Horas Extras</span>
             <span className="text-xl md:text-2xl font-black text-amber-600 font-mono tracking-tight">
-              {formatHours(filteredData.totalOvertimeHours)}
+              {formatMinutes(filteredData.totalOvertimeMinutes)}
             </span>
           </div>
         </div>
@@ -580,19 +593,19 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                           {item.exec.startTime}h - {item.exec.endTime}h
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono text-slate-600">
-                          {formatHours(item.regularHours)}
+                          {formatMinutes(item.regularMinutes)}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono">
-                          {item.overtimeHours > 0 ? (
+                          {item.overtimeMinutes > 0 ? (
                             <span className="inline-block bg-amber-50 text-amber-700 border border-amber-200/50 px-2 py-0.5 rounded-md font-bold">
-                              {formatHours(item.overtimeHours)}
+                              {formatMinutes(item.overtimeMinutes)}
                             </span>
                           ) : (
                             <span className="text-slate-400 font-normal">-</span>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right font-bold text-slate-950 font-mono">
-                          {formatHours(item.exec.totalHours)}
+                          {formatMinutes(item.totalMinutes)}
                         </td>
                       </tr>
                     );
@@ -613,7 +626,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.entries(filteredData.operatorSummary).map(([name, data]) => {
-                  const dataTyped = data as { hours: number; regularHours: number; overtimeHours: number; count: number; sections: Set<string> };
+                  const dataTyped = data as { minutes: number; regularMinutes: number; overtimeMinutes: number; count: number; sections: Set<string> };
                   return (
                     <div key={name} className="bg-slate-50 rounded-xl p-4 border border-slate-150/50 hover:border-slate-300 transition">
                       <div className="flex justify-between items-start mb-2.5">
@@ -625,10 +638,10 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                         </div>
                         <div className="text-right">
                           <span className="text-sm font-black font-mono text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/50">
-                            {formatHours(dataTyped.hours)}
+                            {formatMinutes(dataTyped.minutes)}
                           </span>
                           <div className="text-[10px] text-slate-500 font-semibold font-mono mt-1">
-                            Reg: {formatHours(dataTyped.regularHours)} | <span className="text-amber-600 font-bold">Extra: {formatHours(dataTyped.overtimeHours)}</span>
+                            Reg: {formatMinutes(dataTyped.regularMinutes)} | <span className="text-amber-600 font-bold">Extra: {formatMinutes(dataTyped.overtimeMinutes)}</span>
                           </div>
                         </div>
                       </div>
@@ -658,7 +671,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.entries(filteredData.sectionSummary).map(([section, data]) => {
-                  const dataTyped = data as { hours: number; operators: Set<string>; count: number };
+                  const dataTyped = data as { minutes: number; operators: Set<string>; count: number };
                   return (
                     <div key={section} className="bg-slate-50 rounded-xl p-4 border border-slate-150/50 hover:border-slate-300 transition">
                       <div className="flex justify-between items-start mb-2.5">
@@ -669,7 +682,7 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                           </span>
                         </div>
                         <span className="text-sm font-black font-mono text-emerald-600 bg-emerald-50/50 px-2.5 py-1 rounded-lg border border-emerald-100/50">
-                          {formatHours(dataTyped.hours)}
+                          {formatMinutes(dataTyped.minutes)}
                         </span>
                       </div>
                       
@@ -747,15 +760,15 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                 <div className="grid grid-cols-4 gap-4 mb-6 text-center">
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Horas Totais</span>
-                    <span className="text-base font-black text-slate-950 font-mono">{formatHours(filteredData.totalHours)}</span>
+                    <span className="text-base font-black text-slate-950 font-mono">{formatMinutes(filteredData.totalMinutes)}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Horas Regulares</span>
-                    <span className="text-base font-black text-slate-950 font-mono">{formatHours(filteredData.totalRegularHours)}</span>
+                    <span className="text-base font-black text-slate-950 font-mono">{formatMinutes(filteredData.totalRegularMinutes)}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono text-amber-600">Horas Extras</span>
-                    <span className="text-base font-black text-amber-600 font-mono">{formatHours(filteredData.totalOvertimeHours)}</span>
+                    <span className="text-base font-black text-amber-600 font-mono">{formatMinutes(filteredData.totalOvertimeMinutes)}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <span className="block text-[8px] font-black text-slate-400 uppercase font-mono">Qtde Apontamentos</span>
@@ -790,9 +803,9 @@ export default function ReportsPanel({ orders, operators }: ReportsPanelProps) {
                             <td className="py-2 px-2 uppercase font-bold text-[10px] max-w-[120px] truncate">{item.drawingNumber || '-'}</td>
                             <td className="py-2 px-2 font-mono text-[10px]">{item.exec.section}</td>
                             <td className="py-2 px-2 uppercase font-bold text-[10px]">{item.exec.operator}</td>
-                            <td className="py-2 px-2 text-right font-mono">{formatHours(item.regularHours)}</td>
-                            <td className="py-2 px-2 text-right font-mono text-amber-600 font-bold">{item.overtimeHours > 0 ? formatHours(item.overtimeHours) : '-'}</td>
-                            <td className="py-2 px-2 text-right font-mono font-bold">{formatHours(item.exec.totalHours)}</td>
+                            <td className="py-2 px-2 text-right font-mono">{formatMinutes(item.regularMinutes)}</td>
+                            <td className="py-2 px-2 text-right font-mono text-amber-600 font-bold">{item.overtimeMinutes > 0 ? formatMinutes(item.overtimeMinutes) : '-'}</td>
+                            <td className="py-2 px-2 text-right font-mono font-bold">{formatMinutes(item.totalMinutes)}</td>
                           </tr>
                         );
                       })}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ServiceOrder, Operator } from './types';
-import { INITIAL_SERVICE_ORDERS, INITIAL_OPERATORS } from './mockData';
+import { ServiceOrder, Operator, Section } from './types';
+import { INITIAL_SERVICE_ORDERS, INITIAL_OPERATORS, INITIAL_SECTIONS } from './mockData';
 import Dashboard from './components/Dashboard';
 import OrderList from './components/OrderList';
 import OrderDetails from './components/OrderDetails';
@@ -20,7 +20,9 @@ import {
   X,
   FileText,
   Users,
-  BarChart3
+  BarChart3,
+  Gift,
+  Briefcase
 } from 'lucide-react';
 import { 
   seedInitialDataIfNeeded, 
@@ -31,8 +33,80 @@ import {
   updateSystemPassword,
   subscribeServiceOrders,
   subscribeOperators,
-  subscribeSystemPassword
+  subscribeSystemPassword,
+  saveSectionsToDb,
+  subscribeSections
 } from './firebaseService';
+
+function getBirthdayAlertInfo(birthdayStr?: string) {
+  if (!birthdayStr) return { active: false, daysRemaining: 0, formattedDate: '' };
+  const parts = birthdayStr.split('-');
+  if (parts.length !== 3) return { active: false, daysRemaining: 0, formattedDate: '' };
+  
+  const birthMonth = parseInt(parts[1], 10);
+  const birthDay = parseInt(parts[2], 10);
+  
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const currentYear = today.getFullYear();
+  
+  const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+  
+  for (const yr of yearsToCheck) {
+    const bdayCandidate = new Date(yr, birthMonth - 1, birthDay);
+    const startOfAlert = new Date(bdayCandidate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    if (todayMidnight.getTime() >= startOfAlert.getTime() && todayMidnight.getTime() <= bdayCandidate.getTime()) {
+      const diffTime = bdayCandidate.getTime() - todayMidnight.getTime();
+      const daysRemaining = Math.ceil(diffTime / (24 * 60 * 60 * 1000));
+      const formattedDate = `${String(birthDay).padStart(2, '0')}/${String(birthMonth).padStart(2, '0')}`;
+      return {
+        active: true,
+        daysRemaining,
+        formattedDate
+      };
+    }
+  }
+  return { active: false, daysRemaining: 0, formattedDate: '' };
+}
+
+function getWorkAnniversaryAlertInfo(admissionDateStr?: string) {
+  if (!admissionDateStr) return { active: false, daysRemaining: 0, formattedDate: '', yearsCelebrating: 0 };
+  const parts = admissionDateStr.split('-');
+  if (parts.length !== 3) return { active: false, daysRemaining: 0, formattedDate: '', yearsCelebrating: 0 };
+  
+  const admissionYear = parseInt(parts[0], 10);
+  const admissionMonth = parseInt(parts[1], 10);
+  const admissionDay = parseInt(parts[2], 10);
+  
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const currentYear = today.getFullYear();
+  
+  const yearsToCheck = [currentYear - 1, currentYear, currentYear + 1];
+  
+  for (const yr of yearsToCheck) {
+    const anniversaryCandidate = new Date(yr, admissionMonth - 1, admissionDay);
+    const startOfAlert = new Date(anniversaryCandidate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    if (todayMidnight.getTime() >= startOfAlert.getTime() && todayMidnight.getTime() <= anniversaryCandidate.getTime()) {
+      const diffTime = anniversaryCandidate.getTime() - todayMidnight.getTime();
+      const daysRemaining = Math.ceil(diffTime / (24 * 60 * 60 * 1000));
+      const formattedDate = `${String(admissionDay).padStart(2, '0')}/${String(admissionMonth).padStart(2, '0')}`;
+      const yearsCelebrating = yr - admissionYear;
+      
+      if (yearsCelebrating <= 0) continue;
+      
+      return {
+        active: true,
+        daysRemaining,
+        formattedDate,
+        yearsCelebrating
+      };
+    }
+  }
+  return { active: false, daysRemaining: 0, formattedDate: '', yearsCelebrating: 0 };
+}
 
 export default function App() {
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
@@ -55,6 +129,14 @@ export default function App() {
       return INITIAL_OPERATORS;
     }
   });
+  const [sections, setSections] = useState<Section[]>(() => {
+    try {
+      const saved = localStorage.getItem('detecta_sections');
+      return saved ? JSON.parse(saved) : INITIAL_SECTIONS;
+    } catch {
+      return INITIAL_SECTIONS;
+    }
+  });
   const [orderIdToDelete, setOrderIdToDelete] = useState<string | null>(null);
 
   // Connection/Sync states
@@ -75,6 +157,7 @@ export default function App() {
     let unsubscribeOrders: (() => void) | undefined;
     let unsubscribeOperators: (() => void) | undefined;
     let unsubscribePassword: (() => void) | undefined;
+    let unsubscribeSections: (() => void) | undefined;
 
     const initFirebaseSync = async () => {
       try {
@@ -120,6 +203,25 @@ export default function App() {
             } catch (err) {
               console.error('Failed to save operators to localStorage:', err);
             }
+
+            // Auto-sync missing birthdays from the provided spreadsheet data
+            const needsUpdate = liveOperators.some(op => {
+              const match = INITIAL_OPERATORS.find(initOp => initOp.name.toUpperCase() === op.name.toUpperCase());
+              return match && match.birthday && !op.birthday;
+            });
+
+            if (needsUpdate) {
+              const updatedList = liveOperators.map(op => {
+                const match = INITIAL_OPERATORS.find(initOp => initOp.name.toUpperCase() === op.name.toUpperCase());
+                if (match && match.birthday && !op.birthday) {
+                  return { ...op, birthday: match.birthday };
+                }
+                return op;
+              });
+              saveOperatorsToDb(updatedList).catch(err => {
+                console.error('Error auto-syncing operator birthdays to Firestore:', err);
+              });
+            }
           },
           (error) => {
             console.error('Error listening to operators updates:', error);
@@ -138,6 +240,21 @@ export default function App() {
           }
         );
 
+        // Subscribe to Sections in Real-Time
+        unsubscribeSections = subscribeSections(
+          (liveSections) => {
+            setSections(liveSections);
+            try {
+              localStorage.setItem('detecta_sections', JSON.stringify(liveSections));
+            } catch (err) {
+              console.error('Failed to save sections to localStorage:', err);
+            }
+          },
+          (error) => {
+            console.error('Error listening to sections updates:', error);
+          }
+        );
+
       } catch (error: any) {
         console.error('Error starting real-time sync with Firestore:', error);
         setSyncStatus('local');
@@ -153,6 +270,7 @@ export default function App() {
       if (unsubscribeOrders) unsubscribeOrders();
       if (unsubscribeOperators) unsubscribeOperators();
       if (unsubscribePassword) unsubscribePassword();
+      if (unsubscribeSections) unsubscribeSections();
     };
   }, []);
 
@@ -183,6 +301,22 @@ export default function App() {
       await saveOperatorsToDb(updatedOps);
     } catch (e) {
       console.error('Failed to sync operators in Firestore:', e);
+    }
+  };
+
+  const handleUpdateSections = async (updatedSecs: Section[]) => {
+    setSections(updatedSecs);
+    try {
+      localStorage.setItem('detecta_sections', JSON.stringify(updatedSecs));
+    } catch (err) {
+      console.error('Failed to save sections to localStorage:', err);
+    }
+    try {
+      await saveSectionsToDb(updatedSecs);
+    } catch (e: any) {
+      console.error('Failed to save sections to Firestore:', e);
+      setSyncStatus('local');
+      setSyncError(e?.message || 'Erro ao sincronizar seções na nuvem');
     }
   };
 
@@ -264,6 +398,32 @@ export default function App() {
   const inProgressOrdersCount = orders.filter(o => o.status === 'IN_PROGRESS').length;
   const reworkOrdersCount = orders.filter(o => o.status === 'REWORK').length;
   const totalActiveBadge = openOrdersCount + inProgressOrdersCount + reworkOrdersCount;
+
+  // Birthday warnings selector
+  const activeBirthdayWarnings = operators
+    .filter(op => op.active && op.birthday)
+    .map(op => {
+      const alertInfo = getBirthdayAlertInfo(op.birthday);
+      return {
+        operator: op,
+        alertInfo
+      };
+    })
+    .filter(item => item.alertInfo.active)
+    .sort((a, b) => a.alertInfo.daysRemaining - b.alertInfo.daysRemaining);
+
+  // Work Anniversary warnings selector
+  const activeWorkAnniversaryWarnings = operators
+    .filter(op => op.active && op.admissionDate)
+    .map(op => {
+      const alertInfo = getWorkAnniversaryAlertInfo(op.admissionDate);
+      return {
+        operator: op,
+        alertInfo
+      };
+    })
+    .filter(item => item.alertInfo.active)
+    .sort((a, b) => a.alertInfo.daysRemaining - b.alertInfo.daysRemaining);
 
   if (isLoading) {
     return (
@@ -668,6 +828,78 @@ export default function App() {
 
         {/* Content View Routing Area */}
         <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto pb-12 shrink-0">
+          {/* Active Birthday Alerts */}
+          {activeBirthdayWarnings.length > 0 && (
+            <div className="mb-6 space-y-2.5 animate-fadeIn print:hidden">
+              {activeBirthdayWarnings.map(({ operator, alertInfo }) => (
+                <div 
+                  key={operator.id} 
+                  className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-amber-100 p-2 rounded-xl text-amber-600 shadow-sm shrink-0">
+                      <Gift className="h-5 w-5 animate-bounce" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
+                        Aniversário Chegando! 🎉
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        O colaborador <span className="font-bold text-slate-800 uppercase">{operator.name}</span> ({operator.role}) faz aniversário no dia <span className="font-bold text-amber-700">{alertInfo.formattedDate}</span> 
+                        {alertInfo.daysRemaining === 0 ? (
+                          <span className="ml-1 px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-md font-bold animate-pulse text-[10px]">É HOJE! 🎂 PARABÉNS!</span>
+                        ) : alertInfo.daysRemaining === 1 ? (
+                          <span className="font-semibold"> (Amanhã!)</span>
+                        ) : (
+                          <span className="font-semibold"> (daqui a {alertInfo.daysRemaining} dias)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-[10px] bg-amber-100/60 border border-amber-200 text-amber-800 font-bold px-2.5 py-1 rounded-full uppercase select-none">
+                    Aviso Ativo
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Active Work Anniversary Alerts */}
+          {activeWorkAnniversaryWarnings.length > 0 && (
+            <div className="mb-6 space-y-2.5 animate-fadeIn print:hidden">
+              {activeWorkAnniversaryWarnings.map(({ operator, alertInfo }) => (
+                <div 
+                  key={`anniversary-${operator.id}`} 
+                  className="bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-100 p-2 rounded-xl text-blue-600 shadow-sm shrink-0">
+                      <Briefcase className="h-5 w-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
+                        Aniversário de Empresa! 💼✨
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        O colaborador <span className="font-bold text-slate-800 uppercase">{operator.name}</span> completa <span className="font-extrabold text-blue-700">{alertInfo.yearsCelebrating} {alertInfo.yearsCelebrating === 1 ? 'ano' : 'anos'}</span> de empresa no dia <span className="font-bold text-blue-700">{alertInfo.formattedDate}</span>!
+                        {alertInfo.daysRemaining === 0 ? (
+                          <span className="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md font-bold animate-pulse text-[10px]">É HOJE! 🏆 PARABÉNS!</span>
+                        ) : alertInfo.daysRemaining === 1 ? (
+                          <span className="font-semibold"> (Amanhã!)</span>
+                        ) : (
+                          <span className="font-semibold"> (daqui a {alertInfo.daysRemaining} dias)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-[10px] bg-blue-100/60 border border-blue-200 text-blue-800 font-bold px-2.5 py-1 rounded-full uppercase select-none">
+                    Aniversário de Empresa
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {activeTab === 'dashboard' && (
             <Dashboard 
               orders={orders} 
@@ -706,6 +938,8 @@ export default function App() {
               operators={operators}
               onDeleteOrder={(orderId) => setOrderIdToDelete(orderId)}
               onEditOrder={handleEditOrder}
+              sections={sections}
+              onUpdateSections={handleUpdateSections}
             />
           )}
 

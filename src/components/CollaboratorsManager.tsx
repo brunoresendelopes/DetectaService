@@ -9,8 +9,69 @@ import {
   Check, 
   AlertCircle, 
   Settings,
-  ShieldAlert
+  ShieldAlert,
+  Calendar,
+  Gift,
+  Pencil
 } from 'lucide-react';
+
+function formatDateBR(dateStr?: string): string {
+  if (!dateStr) return '-';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+function calculateYearsOfService(admissionDateStr?: string): string {
+  if (!admissionDateStr) return '-';
+  const parts = admissionDateStr.split('-');
+  if (parts.length !== 3) return '-';
+  
+  const admissionDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const today = new Date();
+  
+  let years = today.getFullYear() - admissionDate.getFullYear();
+  const monthDiff = today.getMonth() - admissionDate.getMonth();
+  const dayDiff = today.getDate() - admissionDate.getDate();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    years--;
+  }
+  
+  if (years < 0) return '0 anos';
+  if (years === 0) {
+    let months = today.getMonth() - admissionDate.getMonth() + (12 * (today.getFullYear() - admissionDate.getFullYear()));
+    if (dayDiff < 0) {
+      months--;
+    }
+    if (months <= 0) return 'Admitido recente';
+    return `${months} ${months === 1 ? 'mês' : 'meses'}`;
+  }
+  
+  return `${years} ${years === 1 ? 'ano' : 'anos'}`;
+}
+
+function calculateAge(birthdayStr?: string): string {
+  if (!birthdayStr) return '-';
+  const parts = birthdayStr.split('-');
+  if (parts.length !== 3) return '-';
+  
+  const birthdayDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const today = new Date();
+  
+  let age = today.getFullYear() - birthdayDate.getFullYear();
+  const monthDiff = today.getMonth() - birthdayDate.getMonth();
+  const dayDiff = today.getDate() - birthdayDate.getDate();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age--;
+  }
+  
+  if (age < 0) return '0 anos';
+  return `${age} ${age === 1 ? 'ano' : 'anos'}`;
+}
 
 interface CollaboratorsManagerProps {
   operators: Operator[];
@@ -27,7 +88,10 @@ export default function CollaboratorsManager({
 }: CollaboratorsManagerProps) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
+  const [admissionDate, setAdmissionDate] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Password edit states
@@ -86,25 +150,45 @@ export default function CollaboratorsManager({
       return;
     }
 
-    // Check if operator with same name already exists
-    const exists = operators.some(op => op.name.toUpperCase() === trimmedName);
+    // Check if operator with same name already exists (excluding the one being edited)
+    const exists = operators.some(op => op.id !== editingId && op.name.toUpperCase() === trimmedName);
     if (exists) {
       setError('Este colaborador já está cadastrado no sistema.');
       return;
     }
 
-    const newOperator: Operator = {
-      id: `op-${Date.now()}`,
-      name: trimmedName,
-      role: trimmedRole,
-      active: true
-    };
-
-    onUpdateOperators([...operators, newOperator]);
+    if (editingId) {
+      const updated = operators.map(op => {
+        if (op.id === editingId) {
+          return {
+            ...op,
+            name: trimmedName,
+            role: trimmedRole,
+            admissionDate: admissionDate || undefined,
+            birthday: birthday || undefined
+          };
+        }
+        return op;
+      });
+      onUpdateOperators(updated);
+      setEditingId(null);
+    } else {
+      const newOperator: Operator = {
+        id: `op-${Date.now()}`,
+        name: trimmedName,
+        role: trimmedRole,
+        active: true,
+        admissionDate: admissionDate || undefined,
+        birthday: birthday || undefined
+      };
+      onUpdateOperators([...operators, newOperator]);
+    }
     
     // Reset Form
     setName('');
     setRole('');
+    setAdmissionDate('');
+    setBirthday('');
   };
 
   const handleDelete = (id: string) => {
@@ -141,8 +225,17 @@ export default function CollaboratorsManager({
         <div className="space-y-6 h-fit">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-              <UserPlus className="h-4.5 w-4.5 text-blue-500" />
-              Cadastrar Novo Colaborador
+              {editingId ? (
+                <>
+                  <Pencil className="h-4.5 w-4.5 text-amber-500" />
+                  Editar Colaborador
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4.5 w-4.5 text-blue-500" />
+                  Cadastrar Novo Colaborador
+                </>
+              )}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs md:text-sm">
@@ -177,13 +270,61 @@ export default function CollaboratorsManager({
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/10"
-              >
-                <UserPlus className="h-4 w-4" />
-                Cadastrar Colaborador
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Data de Admissão</label>
+                  <input
+                    type="date"
+                    value={admissionDate}
+                    onChange={(e) => setAdmissionDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Aniversário</label>
+                  <input
+                    type="date"
+                    value={birthday}
+                    onChange={(e) => setBirthday(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-950 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(null);
+                      setName('');
+                      setRole('');
+                      setAdmissionDate('');
+                      setBirthday('');
+                      setError(null);
+                    }}
+                    className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className={`${editingId ? 'w-2/3 bg-amber-600 hover:bg-amber-700 shadow-amber-500/10' : 'w-full bg-blue-600 hover:bg-blue-700 shadow-blue-500/10'} text-white py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md`}
+                >
+                  {editingId ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Salvar
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      Cadastrar
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
 
@@ -285,6 +426,9 @@ export default function CollaboratorsManager({
                   <tr className="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200">
                     <th className="py-3 px-4">Nome</th>
                     <th className="py-3 px-4">Cargo / Função</th>
+                    <th className="py-3 px-4">Admissão</th>
+                    <th className="py-3 px-4">Tempo de Empresa</th>
+                    <th className="py-3 px-4">Aniversário</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right">Ação</th>
                   </tr>
@@ -300,6 +444,27 @@ export default function CollaboratorsManager({
                           <Briefcase className="h-3.5 w-3.5 text-slate-400" />
                           {op.role}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 font-mono">
+                        {formatDateBR(op.admissionDate)}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 font-mono font-bold text-blue-650">
+                        {calculateYearsOfService(op.admissionDate)}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {op.birthday ? (
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                            <span className="flex items-center gap-1 text-rose-600 font-bold font-mono">
+                              <Gift className="h-3.5 w-3.5 text-rose-500" />
+                              {formatDateBR(op.birthday).substring(0, 5)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-extrabold bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                              {calculateAge(op.birthday)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-mono">-</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <button
@@ -331,13 +496,30 @@ export default function CollaboratorsManager({
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setDeletingId(op.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                            title="Excluir colaborador"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingId(op.id);
+                                setName(op.name);
+                                setRole(op.role);
+                                setAdmissionDate(op.admissionDate || '');
+                                setBirthday(op.birthday || '');
+                                setError(null);
+                                document.getElementById('collaborators-manager-container')?.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition cursor-pointer"
+                              title="Editar colaborador"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(op.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                              title="Excluir colaborador"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

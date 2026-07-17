@@ -76,6 +76,10 @@ export default function OrderForm({
   const [quantity, setQuantity] = useState(1);
   const [inspector, setInspector] = useState('');
   const [nfSerie, setNfSerie] = useState('');
+  const [nfEntrada, setNfEntrada] = useState('');
+  const [nfRetorno, setNfRetorno] = useState('');
+  const [nfServico, setNfServico] = useState('');
+  const [nfVenda, setNfVenda] = useState('');
   const [details, setDetails] = useState('');
   const [rework, setRework] = useState(false);
   const [status, setStatus] = useState<OrderStatus>('OPEN');
@@ -194,6 +198,10 @@ export default function OrderForm({
       setQuantity(orderToEdit.quantity);
       setInspector(orderToEdit.inspector || '');
       setNfSerie(orderToEdit.nfSerie || '');
+      setNfEntrada(orderToEdit.nfEntrada || '');
+      setNfRetorno(orderToEdit.nfRetorno || '');
+      setNfServico(orderToEdit.nfServico || '');
+      setNfVenda(orderToEdit.nfVenda || '');
       setDetails(orderToEdit.details);
       setRework(orderToEdit.rework);
       setStatus(orderToEdit.status);
@@ -222,6 +230,10 @@ export default function OrderForm({
       setQuantity(1);
       setInspector('');
       setNfSerie('');
+      setNfEntrada('');
+      setNfRetorno('');
+      setNfServico('');
+      setNfVenda('');
       setDetails('');
       setRework(false);
       setStatus('OPEN');
@@ -293,6 +305,10 @@ export default function OrderForm({
       quantity: Number(quantity) || 1,
       inspector: inspector.trim() || undefined,
       nfSerie: nfSerie.trim() || undefined,
+      nfEntrada: nfEntrada.trim() || undefined,
+      nfRetorno: nfRetorno.trim() || undefined,
+      nfServico: nfServico.trim() || undefined,
+      nfVenda: nfVenda.trim() || undefined,
       details: details.trim(),
       rework,
       status,
@@ -636,6 +652,56 @@ export default function OrderForm({
                   })()}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Dados de Nota Fiscal (Opcional) */}
+          <div className="space-y-3 bg-slate-50 p-4 border border-slate-200/60 rounded-2xl">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+              <FileText className="h-4 w-4 text-blue-500" />
+              Documentos Fiscais (Opcional)
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">NF Entrada</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 1234"
+                  value={nfEntrada}
+                  onChange={(e) => setNfEntrada(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-450 text-slate-950 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">NF Retorno</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 5678"
+                  value={nfRetorno}
+                  onChange={(e) => setNfRetorno(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-450 text-slate-950 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">NF Serviço</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 9012"
+                  value={nfServico}
+                  onChange={(e) => setNfServico(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-450 text-slate-950 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">NF Venda</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 3456"
+                  value={nfVenda}
+                  onChange={(e) => setNfVenda(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-450 text-slate-950 font-semibold"
+                />
+              </div>
             </div>
           </div>
 
